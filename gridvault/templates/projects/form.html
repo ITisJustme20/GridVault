@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+
+{% set editing = project is not none %}
+{% block title %}{{ 'Edit ' + project.codename if editing else 'Create project' }} | GridVault{% endblock %}
+{% block topbar_title %}{{ 'Edit project' if editing else 'Create project' }}{% endblock %}
+
+{% block content %}
+    <section class="form-heading">
+        <div>
+            <p class="eyebrow">Project Vault / {{ 'Edit record' if editing else 'New record' }}</p>
+            <h1>{{ 'Update mission record' if editing else 'Establish a new project' }}</h1>
+            <p>{{ 'Refine status, objectives, and operator assignments.' if editing else 'Define the project signal before the team moves into action.' }}</p>
+        </div>
+        <a class="secondary-button" href="{{ url_for('projects.detail', project_id=project.id) if editing else url_for('projects.index') }}">Cancel</a>
+    </section>
+
+    {% set codename_value = request.form.get('codename', project.codename if editing else '') %}
+    {% set title_value = request.form.get('title', project.title if editing else '') %}
+    {% set description_value = request.form.get('description', project.description if editing else '') %}
+    {% set status_value = request.form.get('status', project.status if editing else 'Concept') %}
+
+    <form method="post" class="project-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <section class="panel form-section">
+            <div class="form-section-number">01</div>
+            <div class="form-section-body">
+                <p class="eyebrow">Identity</p>
+                <h2>Project coordinates</h2>
+                <div class="form-grid two-column">
+                    <label>
+                        <span>Codename</span>
+                        <input name="codename" type="text" minlength="3" maxlength="40" value="{{ codename_value }}" placeholder="NIGHTFALL" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,39}" required>
+                        <small>3–40 letters, numbers, underscores, or hyphens.</small>
+                    </label>
+                    <label>
+                        <span>Status</span>
+                        <select name="status" required>
+                            {% for status in editable_statuses %}
+                                <option value="{{ status }}" {{ 'selected' if status_value == status else '' }}>{{ status }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+                <label>
+                    <span>Project title</span>
+                    <input name="title" type="text" minlength="3" maxlength="120" value="{{ title_value }}" placeholder="A clear mission title" required>
+                </label>
+                <label>
+                    <span>Description</span>
+                    <textarea name="description" minlength="10" maxlength="2000" rows="6" placeholder="Describe the mission, scope, and intended outcome." required>{{ description_value }}</textarea>
+                    <small>Plain text only. HTML markup is rejected.</small>
+                </label>
+            </div>
+        </section>
+
+        <section class="panel form-section">
+            <div class="form-section-number">02</div>
+            <div class="form-section-body">
+                <p class="eyebrow">Operators</p>
+                <h2>Assign the mission team</h2>
+                <p class="form-helper">Every authenticated operator can view and discuss projects. Only the creator can edit or archive this record.</p>
+                <div class="operator-picker">
+                    {% for operator in operators %}
+                        <label class="operator-option">
+                            <input name="assignee_ids" type="checkbox" value="{{ operator.id }}" {{ 'checked' if operator.id in selected_operator_ids else '' }}>
+                            <span class="operator-avatar">{{ operator.username[:2] | upper }}</span>
+                            <span>{{ operator.username }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <section class="panel form-section">
+            <div class="form-section-number">03</div>
+            <div class="form-section-body">
+                <p class="eyebrow">Objectives</p>
+                <h2>Define mission success</h2>
+                <label>
+                    <span>Objectives — one per line</span>
+                    <textarea name="objectives" rows="8" maxlength="6019" placeholder="Validate the core hypothesis&#10;Deliver the working prototype&#10;Complete operator testing" required>{{ objectives_text }}</textarea>
+                    <small>1–20 objectives, up to 300 characters each. Plain text only.</small>
+                </label>
+            </div>
+        </section>
+
+        <div class="form-actions">
+            <a class="secondary-button" href="{{ url_for('projects.detail', project_id=project.id) if editing else url_for('projects.index') }}">Cancel</a>
+            <button class="primary-button" type="submit">{{ 'Save project' if editing else 'Create project' }} <span aria-hidden="true">→</span></button>
+        </div>
+    </form>
+{% endblock %}

@@ -22,13 +22,6 @@ MODULES = {
         "description": "Coordinate technical work, system health, and implementation milestones across active missions.",
         "capabilities": ["Build queues", "System telemetry", "Technical handoffs"],
     },
-    "project-vault": {
-        "title": "Project Vault",
-        "code": "PV-04",
-        "eyebrow": "Mission inventory",
-        "description": "Keep projects, artifacts, and ownership signals organized in one durable source of truth.",
-        "capabilities": ["Project records", "Artifact tracking", "Ownership maps"],
-    },
     "briefing-room": {
         "title": "Briefing Room",
         "code": "BR-05",
