@@ -45,8 +45,18 @@
                     {% set current_module = request.view_args.get('module_slug') if request.view_args else none %}
                     {% for slug, label, code in [
                         ('design-lab', 'Design Lab', 'DL'),
-                        ('engineering-bay', 'Engineering Bay', 'EB'),
-                        ('project-vault', 'Project Vault', 'PV'),
+                        ('engineering-bay', 'Engineering Bay', 'EB')
+                    ] %}
+                        <a href="{{ url_for('modules.placeholder', module_slug=slug) }}" class="{{ 'active' if current_module == slug else '' }}">
+                            <span class="nav-code">{{ code }}</span>
+                            <span>{{ label }}</span>
+                        </a>
+                    {% endfor %}
+                    <a href="{{ url_for('projects.index') }}" class="{{ 'active' if request.blueprint == 'projects' else '' }}">
+                        <span class="nav-code">PV</span>
+                        <span>Project Vault</span>
+                    </a>
+                    {% for slug, label, code in [
                         ('briefing-room', 'Briefing Room', 'BR'),
                         ('archive', 'Archive', 'AR')
                     ] %}

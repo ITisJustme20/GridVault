@@ -61,7 +61,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .blueprints.console import console_bp
     from .blueprints.hub import hub_bp
     from .blueprints.modules import modules_bp
+    from .blueprints.projects import projects_bp
     from .models import User
+    from .schema import ensure_schema
     from . import realtime  # noqa: F401 - registers Socket.IO handlers
 
     @login_manager.user_loader
@@ -74,6 +76,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(console_bp)
     app.register_blueprint(hub_bp)
+    app.register_blueprint(projects_bp)
     app.register_blueprint(modules_bp)
 
     @app.after_request
@@ -94,7 +97,6 @@ def create_app(test_config: dict | None = None) -> Flask:
         )
         return response
 
-    with app.app_context():
-        db.create_all()
+    ensure_schema(app)
 
     return app

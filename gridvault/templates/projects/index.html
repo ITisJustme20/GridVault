@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}Project Vault | GridVault{% endblock %}
+{% block topbar_title %}Project Vault{% endblock %}
+
+{% block content %}
+    <section class="vault-header">
+        <div>
+            <p class="eyebrow">Mission inventory / PV-04</p>
+            <h1>Project Vault</h1>
+            <p>Track objectives, operators, decisions, and momentum across every GridVault mission.</p>
+        </div>
+        <a class="primary-button" href="{{ url_for('projects.create') }}">Create project <span aria-hidden="true">＋</span></a>
+    </section>
+
+    <section class="vault-controls panel">
+        <form class="vault-search" method="get" role="search">
+            <label class="sr-only" for="project-search">Search projects</label>
+            <input id="project-search" name="q" type="search" maxlength="100" value="{{ search_query }}" placeholder="Search codename, title, or description">
+            <label class="sr-only" for="status-filter">Filter by status</label>
+            <select id="status-filter" name="status">
+                <option value="">Open projects</option>
+                {% for status in project_statuses %}
+                    <option value="{{ status }}" {{ 'selected' if status_filter == status else '' }}>{{ status }} ({{ status_counts.get(status, 0) }})</option>
+                {% endfor %}
+            </select>
+            <button class="secondary-button" type="submit">Apply filters</button>
+            {% if search_query or status_filter %}
+                <a class="clear-filter" href="{{ url_for('projects.index') }}">Clear</a>
+            {% endif %}
+        </form>
+    </section>
+
+    <div class="vault-summary">
+        <span><strong>{{ projects | length }}</strong> matching project{{ '' if projects | length == 1 else 's' }}</span>
+        {% if status_filter %}<span class="status-pill status-{{ status_filter | lower }}">{{ status_filter }}</span>{% endif %}
+    </div>
+
+    {% if projects %}
+        <section class="project-grid" aria-label="Projects">
+            {% for project in projects %}
+                <a class="project-card" href="{{ url_for('projects.detail', project_id=project.id) }}">
+                    <div class="project-card-top">
+                        <span class="project-codename">{{ project.codename }}</span>
+                        <span class="status-pill status-{{ project.status | lower }}">{{ project.status }}</span>
+                    </div>
+                    <h2>{{ project.title }}</h2>
+                    <p>{{ project.description }}</p>
+                    <div class="project-card-meta">
+                        <span>Lead: {{ project.creator.username }}</span>
+                        <span>{{ project.assigned_operators | length }} assigned</span>
+                    </div>
+                    <div class="project-card-footer">
+                        <span>Updated {{ project.updated_at.strftime('%b %d, %Y') }}</span>
+                        <span>Open record →</span>
+                    </div>
+                </a>
+            {% endfor %}
+        </section>
+    {% else %}
+        <section class="panel vault-empty">
+            <span>PV</span>
+            <h2>No matching projects.</h2>
+            <p>Adjust the filters or establish a new mission record.</p>
+            <a class="primary-button" href="{{ url_for('projects.create') }}">Create project</a>
+        </section>
+    {% endif %}
+{% endblock %}

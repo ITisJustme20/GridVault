@@ -11,7 +11,7 @@
             <p>Your Grid is stable. The Hub is live, mission records are intact, and the next layer of GridVault is ready to take shape.</p>
             <div class="hero-actions">
                 <a class="primary-button" href="{{ url_for('hub.chat') }}">Open The Hub <span aria-hidden="true">→</span></a>
-                <a class="secondary-button" href="{{ url_for('modules.placeholder', module_slug='project-vault') }}">View Project Vault</a>
+                <a class="secondary-button" href="{{ url_for('projects.index') }}">View Project Vault</a>
             </div>
         </div>
         <div class="grid-health" aria-label="Grid status">
@@ -37,6 +37,10 @@
             <span class="metric-icon">HB</span>
             <div><p>Hub status</p><strong>Live</strong><small>Realtime link available</small></div>
         </article>
+        <article class="metric-card metric-projects">
+            <span class="metric-icon">PV</span>
+            <div><p>Active projects</p><strong>{{ active_project_count }}</strong><small>In active execution</small></div>
+        </article>
     </section>
 
     <div class="dashboard-grid">
@@ -54,7 +58,8 @@
                     ('archive', 'AR', 'Archive', 'Completed missions and operational memory.'),
                     ('settings', 'ST', 'Settings', 'Operator and workspace controls.')
                 ] %}
-                    <a class="module-card" href="{{ url_for('modules.placeholder', module_slug=slug) }}">
+                    {% set module_url = url_for('projects.index') if slug == 'project-vault' else url_for('modules.placeholder', module_slug=slug) %}
+                    <a class="module-card" href="{{ module_url }}">
                         <span class="module-code">{{ code }}</span>
                         <span class="module-status">Staged</span>
                         <h3>{{ title }}</h3>
@@ -67,7 +72,33 @@
 
         <aside class="panel activity-panel">
             <div class="section-heading">
-                <div><p class="eyebrow">Live record</p><h2>Recent signals</h2></div>
+                <div><p class="eyebrow">Project Vault</p><h2>Recent activity</h2></div>
+            </div>
+            {% if recent_project_activity %}
+                <ol class="signal-list">
+                    {% for activity in recent_project_activity %}
+                        <li>
+                            <span class="signal-avatar">{{ activity.project.codename[:2] | upper }}</span>
+                            <div>
+                                <strong>{{ activity.project.codename }}</strong>
+                                <p>{{ activity.detail }}</p>
+                                <time>{{ activity.actor.username }} · {{ activity.created_at.strftime('%b %d · %I:%M %p') }}</time>
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ol>
+            {% else %}
+                <div class="empty-state">
+                    <span>···</span>
+                    <h3>No project activity yet</h3>
+                    <p>Create the first record in Project Vault.</p>
+                </div>
+            {% endif %}
+            <a class="text-link" href="{{ url_for('projects.index') }}">Open Project Vault <span aria-hidden="true">→</span></a>
+
+            <div class="activity-divider"></div>
+            <div class="section-heading activity-subheading">
+                <div><p class="eyebrow">The Hub</p><h2>Recent signals</h2></div>
             </div>
             {% if recent_messages %}
                 <ol class="signal-list">
@@ -83,13 +114,9 @@
                     {% endfor %}
                 </ol>
             {% else %}
-                <div class="empty-state">
-                    <span>···</span>
-                    <h3>No signals yet</h3>
-                    <p>Start the first mission thread in The Hub.</p>
-                </div>
+                <p class="detail-empty">No Hub signals yet.</p>
             {% endif %}
-            <a class="text-link" href="{{ url_for('hub.chat') }}">View all Hub activity <span aria-hidden="true">→</span></a>
+            <a class="text-link" href="{{ url_for('hub.chat') }}">Open The Hub <span aria-hidden="true">→</span></a>
         </aside>
     </div>
 {% endblock %}

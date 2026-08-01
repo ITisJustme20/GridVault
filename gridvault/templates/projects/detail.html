@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ project.codename }} | Project Vault{% endblock %}
+{% block topbar_title %}Project Vault / {{ project.codename }}{% endblock %}
+
+{% block content %}
+    <section class="project-detail-header">
+        <div>
+            <div class="detail-badges">
+                <span class="project-codename">{{ project.codename }}</span>
+                <span class="status-pill status-{{ project.status | lower }}">{{ project.status }}</span>
+            </div>
+            <h1>{{ project.title }}</h1>
+            <p>{{ project.description }}</p>
+        </div>
+        <div class="detail-actions">
+            <a class="secondary-button" href="{{ url_for('projects.index') }}">← Project Vault</a>
+            {% if project.creator_id == current_user.id and project.status != 'Archived' %}
+                <a class="primary-button" href="{{ url_for('projects.edit', project_id=project.id) }}">Edit project</a>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="project-facts panel">
+        <dl>
+            <div><dt>Creator callsign</dt><dd>{{ project.creator.username }}</dd></div>
+            <div><dt>Created</dt><dd>{{ project.created_at.strftime('%b %d, %Y · %I:%M %p') }}</dd></div>
+            <div><dt>Last updated</dt><dd>{{ project.updated_at.strftime('%b %d, %Y · %I:%M %p') }}</dd></div>
+            <div><dt>Objectives</dt><dd>{{ project.objectives | length }}</dd></div>
+        </dl>
+    </section>
+
+    <div class="project-detail-grid">
+        <div class="project-detail-main">
+            <section class="panel detail-panel">
+                <div class="section-heading">
+                    <div><p class="eyebrow">Mission objectives</p><h2>Success criteria</h2></div>
+                    <span class="section-note">{{ project.objectives | length }} total</span>
+                </div>
+                <ol class="objective-list">
+                    {% for objective in project.objectives %}
+                        <li><span>{{ '%02d' | format(loop.index) }}</span><p>{{ objective.body }}</p></li>
+                    {% endfor %}
+                </ol>
+            </section>
+
+            <section class="panel detail-panel discussion-panel">
+                <div class="section-heading">
+                    <div><p class="eyebrow">Project channel</p><h2>Discussion</h2></div>
+                    <span class="section-note">{{ comments | length }} messages</span>
+                </div>
+                {% if comments %}
+                    <div class="project-comments">
+                        {% for comment in comments %}
+                            <article>
+                                <span class="operator-avatar">{{ comment.author.username[:2] | upper }}</span>
+                                <div>
+                                    <header><strong>{{ comment.author.username }}</strong><time>{{ comment.created_at.strftime('%b %d · %I:%M %p') }}</time></header>
+                                    <p>{{ comment.body }}</p>
+                                </div>
+                            </article>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="detail-empty">No project discussion yet. Open the first thread below.</p>
+                {% endif %}
+                {% if project.status != 'Archived' %}
+                    <form class="discussion-form" action="{{ url_for('projects.add_comment', project_id=project.id) }}" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <label class="sr-only" for="discussion-body">Project discussion message</label>
+                        <textarea id="discussion-body" name="body" maxlength="1000" rows="3" placeholder="Add context, a decision, or a mission update…" required></textarea>
+                        <button class="primary-button" type="submit">Post update</button>
+                    </form>
+                {% else %}
+                    <p class="archived-notice">This archived discussion is preserved as a read-only record.</p>
+                {% endif %}
+            </section>
+        </div>
+
+        <aside class="project-detail-side">
+            <section class="panel detail-panel">
+                <p class="eyebrow">Assigned operators</p>
+                <h2>Mission team</h2>
+                {% if project.assigned_operators %}
+                    <ul class="assigned-list">
+                        {% for operator in project.assigned_operators %}
+                            <li><span class="operator-avatar">{{ operator.username[:2] | upper }}</span><strong>{{ operator.username }}</strong></li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="detail-empty">No additional operators assigned.</p>
+                {% endif %}
+            </section>
+
+            <section class="panel detail-panel">
+                <div class="section-heading">
+                    <div><p class="eyebrow">Activity timeline</p><h2>Project record</h2></div>
+                </div>
+                <ol class="activity-timeline">
+                    {% for activity in activities %}
+                        <li>
+                            <span class="timeline-dot"></span>
+                            <div><strong>{{ activity.detail }}</strong><p>{{ activity.actor.username }} · {{ activity.created_at.strftime('%b %d, %Y · %I:%M %p') }}</p></div>
+                        </li>
+                    {% endfor %}
+                </ol>
+            </section>
+
+            {% if project.creator_id == current_user.id and project.status == 'Complete' %}
+                <section class="panel archive-panel">
+                    <p class="eyebrow">Closeout protocol</p>
+                    <h2>Archive completed project</h2>
+                    <p>Archived records remain searchable and read-only.</p>
+                    <form action="{{ url_for('projects.archive', project_id=project.id) }}" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="danger-button" type="submit">Archive {{ project.codename }}</button>
+                    </form>
+                </section>
+            {% endif %}
+        </aside>
+    </div>
+{% endblock %}
