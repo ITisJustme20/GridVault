@@ -31,6 +31,8 @@ DESIGN_STAGES = (
     "Archived",
 )
 
+CONVERSATION_TYPES = ("grid", "direct", "group")
+
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -55,6 +57,89 @@ class User(UserMixin, db.Model):
     )
 
 
+class Conversation(db.Model):
+    __table_args__ = (
+        db.CheckConstraint(
+            "type IN ('grid', 'direct', 'group')",
+            name="ck_conversation_type",
+        ),
+        db.Index("idx_conversation_type_updated", "type", "updated_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    type = db.Column(db.String(10), nullable=False, index=True)
+    name = db.Column(db.String(80))
+    direct_key = db.Column(db.String(40), unique=True, index=True)
+    creator_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+    creator = db.relationship(
+        "User",
+        foreign_keys=[creator_id],
+        backref=db.backref("created_conversations", lazy=True),
+    )
+    memberships = db.relationship(
+        "ConversationMember",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ConversationMember.joined_at",
+    )
+    messages = db.relationship(
+        "Message",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        foreign_keys="Message.conversation_id",
+        order_by="Message.created_at",
+    )
+
+
+class ConversationMember(db.Model):
+    __table_args__ = (
+        db.Index("idx_conversation_member_user", "user_id", "conversation_id"),
+    )
+
+    conversation_id = db.Column(
+        db.Integer,
+        db.ForeignKey("conversation.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    joined_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    last_read_message_id = db.Column(
+        db.Integer,
+        db.ForeignKey("message.id", ondelete="SET NULL"),
+    )
+
+    conversation = db.relationship("Conversation", back_populates="memberships")
+    user = db.relationship(
+        "User",
+        backref=db.backref("conversation_memberships", lazy=True),
+    )
+    last_read_message = db.relationship(
+        "Message",
+        foreign_keys=[last_read_message_id],
+    )
+
+
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     body = db.Column(db.String(500), nullable=False)
@@ -67,6 +152,18 @@ class Message(db.Model):
         db.Integer,
         db.ForeignKey("user.id"),
         nullable=False,
+    )
+    conversation_id = db.Column(
+        db.Integer,
+        db.ForeignKey("conversation.id"),
+        nullable=True,
+        index=True,
+    )
+
+    conversation = db.relationship(
+        "Conversation",
+        back_populates="messages",
+        foreign_keys=[conversation_id],
     )
 
 

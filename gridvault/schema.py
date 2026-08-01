@@ -27,9 +27,50 @@ def _add_missing_design_columns() -> None:
             )
 
 
+def _add_missing_message_columns() -> None:
+    """Add the nullable conversation link without rewriting legacy messages."""
+    inspector = inspect(db.engine)
+    if "message" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("message")}
+    with db.engine.begin() as connection:
+        if "conversation_id" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE message ADD COLUMN conversation_id "
+                    "INTEGER REFERENCES conversation(id)"
+                )
+            )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_message_conversation_id "
+                "ON message (conversation_id)"
+            )
+        )
+
+
+def _associate_grid_history() -> None:
+    """Create the single Grid conversation and attach every legacy message."""
+    from .chat_service import ensure_grid_membership, get_grid_conversation
+    from .models import Message, User
+
+    grid = get_grid_conversation()
+    db.session.execute(
+        db.update(Message)
+        .where(Message.conversation_id.is_(None))
+        .values(conversation_id=grid.id)
+    )
+    users = db.session.execute(db.select(User)).scalars().all()
+    for user in users:
+        ensure_grid_membership(user)
+    db.session.commit()
+
+
 def ensure_schema(app) -> None:
     """Create missing schema objects without altering existing data."""
 
     with app.app_context():
         db.create_all()
+        _add_missing_message_columns()
         _add_missing_design_columns()
+        _associate_grid_history()

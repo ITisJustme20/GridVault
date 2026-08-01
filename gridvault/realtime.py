@@ -1,19 +1,33 @@
-"""Socket.IO events for Hub presence and messaging."""
+"""Authorized Socket.IO presence, messaging, typing, and read-state events."""
+
+from __future__ import annotations
+
+import re
+from datetime import datetime, timezone
 
 from flask import request
 from flask_login import current_user
-from flask_socketio import disconnect, emit
+from flask_socketio import disconnect, emit, join_room
 
+from .chat_service import (
+    accessible_conversations,
+    authorized_conversation,
+    conversation_room,
+    ensure_grid_membership,
+    receipt_callsigns,
+    serialize_message,
+    user_room,
+)
 from .extensions import db, socketio
 from .models import Message, User
 
 
-# A user may have multiple browser tabs connected at once.
 connected_users: dict[int, dict[str, object]] = {}
 sid_to_user_id: dict[str, int] = {}
-
-# Read receipts are intentionally ephemeral and reset with the server process.
+# Compatibility alias retained for older test and extension imports. Read
+# state now lives durably on ConversationMember rather than in this mapping.
 message_receipts: dict[int, set[int]] = {}
+CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
 def get_online_callsigns() -> list[str]:
@@ -29,15 +43,29 @@ def broadcast_online_users() -> None:
     socketio.emit("online_users", {"users": get_online_callsigns()})
 
 
-def get_receipt_callsigns(message_id: int) -> list[str]:
-    user_ids = message_receipts.get(message_id, set())
-    if not user_ids:
-        return []
+def _conversation_id(data, *, default_grid=False) -> int | None:
+    raw_value = data.get("conversation_id") if isinstance(data, dict) else None
+    if raw_value is None and default_grid:
+        grid, _ = ensure_grid_membership(current_user)
+        db.session.commit()
+        return grid.id
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
 
-    users = db.session.execute(
-        db.select(User).where(User.id.in_(user_ids))
-    ).scalars().all()
-    return sorted([user.username for user in users], key=str.lower)
+
+def _authorized(data, *, default_grid=False):
+    conversation_id = _conversation_id(data, default_grid=default_grid)
+    if conversation_id is None:
+        emit("conversation_error", {"error": "Select a valid conversation."})
+        return None, None
+    conversation, membership = authorized_conversation(conversation_id, current_user)
+    if conversation is None or membership is None:
+        emit("conversation_error", {"error": "Conversation access denied."})
+        return None, None
+    return conversation, membership
 
 
 @socketio.on("connect")
@@ -47,13 +75,17 @@ def handle_connect():
 
     user_id = current_user.id
     sid = request.sid
+    ensure_grid_membership(current_user)
+    db.session.commit()
+    join_room(user_room(user_id))
+    for conversation in accessible_conversations(current_user):
+        join_room(conversation_room(conversation.id))
 
     if user_id not in connected_users:
         connected_users[user_id] = {
             "callsign": current_user.username,
             "sids": set(),
         }
-
     connected_users[user_id]["sids"].add(sid)
     sid_to_user_id[sid] = user_id
     broadcast_online_users()
@@ -65,16 +97,25 @@ def handle_disconnect():
     user_id = sid_to_user_id.pop(sid, None)
     if user_id is None:
         return
-
     user_data = connected_users.get(user_id)
     if user_data is None:
         return
-
     user_data["sids"].discard(sid)
     if not user_data["sids"]:
         connected_users.pop(user_id, None)
-
     broadcast_online_users()
+
+
+@socketio.on("subscribe_conversation")
+def handle_subscribe(data):
+    if not current_user.is_authenticated:
+        disconnect()
+        return
+    conversation, _ = _authorized(data)
+    if conversation is None:
+        return
+    join_room(conversation_room(conversation.id))
+    emit("conversation_subscribed", {"conversation_id": conversation.id})
 
 
 @socketio.on("send_message")
@@ -82,77 +123,103 @@ def handle_message(data):
     if not current_user.is_authenticated:
         disconnect()
         return
-
     if not isinstance(data, dict):
+        emit("message_error", {"error": "The message payload is invalid."})
+        return
+    conversation, _ = _authorized(data, default_grid=True)
+    if conversation is None:
         return
 
     message_text = str(data.get("message", "")).strip()
     if not message_text:
+        emit("message_error", {"error": "Messages cannot be empty."})
+        return
+    if len(message_text) > 500 or "\x00" in message_text:
+        emit("message_error", {"error": "Messages must be plain text with at most 500 characters."})
+        return
+    client_id = str(data.get("client_id", "")).strip()
+    if client_id and not CLIENT_ID_PATTERN.fullmatch(client_id):
+        emit("message_error", {"error": "The pending message identifier is invalid."})
         return
 
-    if len(message_text) > 500:
-        emit(
-            "message_error",
-            {"error": "Messages cannot exceed 500 characters."},
-        )
-        return
-
-    new_message = Message(body=message_text, user_id=current_user.id)
+    new_message = Message(
+        body=message_text,
+        user_id=current_user.id,
+        conversation_id=conversation.id,
+    )
+    conversation.updated_at = datetime.now(timezone.utc)
     db.session.add(new_message)
     db.session.commit()
-
-    emit(
+    payload = serialize_message(new_message)
+    payload["client_id"] = client_id
+    socketio.emit(
         "receive_message",
+        payload,
+        to=conversation_room(conversation.id),
+    )
+    emit(
+        "message_ack",
         {
-            "id": new_message.id,
-            "callsign": current_user.username,
-            "message": new_message.body,
-            "created_at": new_message.created_at.isoformat(),
+            "client_id": client_id,
+            "message_id": new_message.id,
+            "conversation_id": conversation.id,
         },
-        broadcast=True,
     )
 
+
+def _typing_event(data, event_name: str):
+    if not current_user.is_authenticated:
+        return
+    conversation, _ = _authorized(data, default_grid=True)
+    if conversation is None:
+        return
+    emit(
+        event_name,
+        {
+            "conversation_id": conversation.id,
+            "callsign": current_user.username,
+        },
+        to=conversation_room(conversation.id),
+        include_self=False,
+    )
+
+
 @socketio.on("typing")
-def handle_typing():
-    if current_user.is_authenticated:
-        emit(
-            "user_typing",
-            {"callsign": current_user.username},
-            broadcast=True,
-            include_self=False,
-        )
+def handle_typing(data=None):
+    _typing_event(data or {}, "user_typing")
 
 
 @socketio.on("stop_typing")
-def handle_stop_typing():
-    if current_user.is_authenticated:
-        emit(
-            "user_stopped_typing",
-            {"callsign": current_user.username},
-            broadcast=True,
-            include_self=False,
-        )
+def handle_stop_typing(data=None):
+    _typing_event(data or {}, "user_stopped_typing")
 
 
 @socketio.on("mark_read")
 def handle_mark_read(data):
     if not current_user.is_authenticated or not isinstance(data, dict):
         return
-
+    conversation, membership = _authorized(data, default_grid=True)
+    if conversation is None or membership is None:
+        return
     try:
         message_id = int(data.get("message_id"))
     except (TypeError, ValueError):
+        emit("conversation_error", {"error": "Read state is invalid."})
         return
-
-    if db.session.get(Message, message_id) is None:
+    message = db.session.get(Message, message_id)
+    if message is None or message.conversation_id != conversation.id:
+        emit("conversation_error", {"error": "Read state is invalid."})
         return
-
-    message_receipts.setdefault(message_id, set()).add(current_user.id)
-    emit(
+    if membership.last_read_message_id is None or message_id > membership.last_read_message_id:
+        membership.last_read_message_id = message_id
+        db.session.commit()
+    callsigns = receipt_callsigns(message)
+    socketio.emit(
         "read_receipt_update",
         {
-            "message_id": message_id,
-            "callsigns": get_receipt_callsigns(message_id),
+            "conversation_id": conversation.id,
+            "message_id": message.id,
+            "callsigns": callsigns,
         },
-        broadcast=True,
+        to=conversation_room(conversation.id),
     )
