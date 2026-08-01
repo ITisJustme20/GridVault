@@ -200,6 +200,11 @@ class DesignLabTestCase(unittest.TestCase):
             saved = json.loads(design.board_state)
             self.assertEqual({item["type"] for item in saved}, set(element_types))
             self.assertEqual(design.board_version, 1)
+            arrow = next(item for item in saved if item["type"] == "arrow")
+            self.assertEqual(
+                {"start_x", "start_y", "end_x", "end_y"},
+                {key for key in arrow if key.endswith(("_x", "_y"))},
+            )
 
     def test_concurrent_board_save_cannot_overwrite_newer_state(self):
         self.register("VEGA_7")
