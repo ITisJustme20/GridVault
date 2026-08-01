@@ -1,7 +1,10 @@
 const workspace = document.getElementById("hub-workspace");
 
 if (workspace) {
-    const socket = io({ transports: ["websocket"] });
+    // Allow Socket.IO to start with HTTP polling and upgrade to WebSocket.
+    // This keeps The Hub functional through forwarded URLs and proxies that do
+    // not pass WebSocket traffic immediately.
+    const socket = io();
     const currentCallsign = workspace.dataset.callsign;
     const messageForm = document.getElementById("message-form");
     const messageInput = document.getElementById("message-input");

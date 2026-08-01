@@ -44,6 +44,8 @@ Creators manage collaborator assignments and archive approved designs. Creators 
 
 Uploads are limited to structurally recognized PNG, JPEG, GIF, or WebP images of at most 5 MB. Uploaded assets are stored under the ignored instance directory. Text remains plain text, reference cards and linked URLs require HTTPS, JSON board payloads are bounded and validated, and every state-changing form or request is CSRF-protected.
 
+On the concept board, drag an element by its labeled move bar or drag a non-text shape directly. Drag empty canvas space to pan. Two-finger touchpad scrolling pans, while pinch/Control-scroll zooms around the pointer. Text regions remain selectable and editable without starting a drag. Autosave serializes local writes and uses an additive board-version token so an older browser tab cannot overwrite newer saved work; a visible conflict state offers a safe Reload board action.
+
 ## Local setup
 
 GridVault requires Python 3.10 or newer.
@@ -77,6 +79,7 @@ GridVault is then available at `http://localhost:5000`.
 | `SOCKETIO_CORS_ALLOWED_ORIGINS` | Optional comma-separated trusted browser origins | Same-origin only |
 | `DESIGN_UPLOAD_FOLDER` | Private Design Lab image storage | `instance/design_uploads/` |
 | `DESIGN_UPLOAD_MAX_BYTES` | Per-image upload limit | 5 MB |
+| `GRIDVAULT_DEBUG` | Opt into the Flask debugger and reloader for local development | Disabled |
 
 For production, set both `GRIDVAULT_ENV=production` and a strong `SECRET_KEY`. Never place real secrets in source control.
 
@@ -113,9 +116,13 @@ Run the automated suite with:
 
 ```bash
 python -m unittest discover -s tests -v
+node --test tests/js/*.test.js
+node --check gridvault/static/js/design_board_core.js
+node --check gridvault/static/js/design_board.js
+node --check gridvault/static/js/chat.js
 ```
 
-The suite verifies authentication, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same suite runs in GitHub Actions for pushes and pull requests.
+The suite verifies authentication, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
 
 ## Production serving
 

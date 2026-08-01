@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from sqlalchemy import inspect, text
+
 from gridvault import create_app
 from gridvault.extensions import db
 from gridvault.models import (
@@ -127,6 +129,22 @@ class DesignLabTestCase(unittest.TestCase):
             self.assertEqual(design.revision_number, 1)
             self.assertEqual(len(design.revisions), 1)
 
+    def test_optional_dossier_fields_have_polished_empty_states(self):
+        self.register("VEGA_7")
+        response = self.create_design(
+            constraints="",
+            materials="",
+            dimensions="",
+            components="",
+            risks="",
+            references="",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Awaiting cover image", response.data)
+        self.assertGreaterEqual(response.data.count(b"Not specified."), 6)
+        self.assertIn(b"No revision feedback yet.", response.data)
+
     def test_concept_board_persists_all_supported_elements(self):
         self.register("VEGA_7")
         self.create_design()
@@ -173,12 +191,75 @@ class DesignLabTestCase(unittest.TestCase):
             )
         response = self.client.post(
             f"/design-lab/{design_id}/board",
-            json={"elements": elements},
+            json={"elements": elements, "base_version": 0},
         )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["board_version"], 1)
         with self.app.app_context():
-            saved = json.loads(db.session.get(Design, design_id).board_state)
+            design = db.session.get(Design, design_id)
+            saved = json.loads(design.board_state)
             self.assertEqual({item["type"] for item in saved}, set(element_types))
+            self.assertEqual(design.board_version, 1)
+
+    def test_concurrent_board_save_cannot_overwrite_newer_state(self):
+        self.register("VEGA_7")
+        self.create_design()
+        design_id = self.design_id()
+        first_state = [{
+            "id": "first_position",
+            "type": "text",
+            "x": 120,
+            "y": 160,
+            "width": 220,
+            "height": 140,
+            "z": 0,
+            "content": "Newest position",
+            "color": "#67d8c4",
+            "url": "",
+        }]
+        stale_state = [{**first_state[0], "x": 900, "content": "Stale position"}]
+
+        first = self.client.post(
+            f"/design-lab/{design_id}/board",
+            json={"elements": first_state, "base_version": 0},
+        )
+        stale = self.client.post(
+            f"/design-lab/{design_id}/board",
+            json={"elements": stale_state, "base_version": 0},
+        )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(stale.status_code, 409)
+        self.assertEqual(stale.get_json()["board_version"], 1)
+        with self.app.app_context():
+            design = db.session.get(Design, design_id)
+            self.assertEqual(design.board_version, 1)
+            self.assertEqual(json.loads(design.board_state), first_state)
+
+    def test_board_geometry_must_stay_inside_canvas(self):
+        self.register("VEGA_7")
+        self.create_design()
+        design_id = self.design_id()
+        outside = [{
+            "id": "outside",
+            "type": "rectangle",
+            "x": 3990,
+            "y": 2990,
+            "width": 100,
+            "height": 100,
+            "z": 0,
+            "content": "",
+            "color": "#67d8c4",
+            "url": "",
+        }]
+
+        response = self.client.post(
+            f"/design-lab/{design_id}/board",
+            json={"elements": outside, "base_version": 0},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b"outside the allowed bounds", response.data)
 
     def test_dossier_edits_and_board_checkpoints_create_revision_snapshots(self):
         self.register("VEGA_7")
@@ -290,8 +371,13 @@ class DesignLabTestCase(unittest.TestCase):
         self.login("OWNER_1")
         archived = self.client.post(f"/design-lab/{design_id}/archive", follow_redirects=True)
         self.assertIn(b"Archived", archived.data)
+        archived_board = self.client.get(f"/design-lab/{design_id}/board")
+        self.assertIn(b'data-editable="false"', archived_board.data)
+        self.assertIn(b"Archived designs cannot be modified.", archived_board.data)
+        self.assertIn(b"Read-only board", archived_board.data)
+        self.assertIn(b"disabled", archived_board.data)
         self.assertEqual(self.client.get(f"/design-lab/{design_id}/edit").status_code, 409)
-        self.assertEqual(self.client.post(f"/design-lab/{design_id}/board", json={"elements": []}).status_code, 409)
+        self.assertEqual(self.client.post(f"/design-lab/{design_id}/board", json={"elements": [], "base_version": 0}).status_code, 409)
         self.assertEqual(self.client.post(f"/design-lab/{design_id}/comments", data={"revision_number": "4", "body": "No more edits."}).status_code, 409)
 
         self.client.post("/logout")
@@ -351,6 +437,52 @@ class DesignLabTestCase(unittest.TestCase):
         self.assertIn(b'name="csrf_token"', self.client.get(f"/design-lab/{design_id}").data)
         self.assertEqual(self.client.post("/design-lab/new", data=self.payload()).status_code, 400)
         self.assertEqual(self.client.post(f"/design-lab/{design_id}/board", json={"elements": []}).status_code, 400)
+
+    def test_additive_schema_upgrade_adds_board_version_to_v2_database(self):
+        with tempfile.TemporaryDirectory() as temp_directory:
+            database_path = Path(temp_directory) / "design-v2.db"
+            database_uri = f"sqlite:///{database_path.as_posix()}"
+            baseline = create_app(
+                {
+                    "TESTING": True,
+                    "SECRET_KEY": "baseline-schema-key",
+                    "SQLALCHEMY_DATABASE_URI": database_uri,
+                    "WTF_CSRF_ENABLED": False,
+                }
+            )
+            with baseline.app_context():
+                with db.engine.begin() as connection:
+                    connection.execute(
+                        text("ALTER TABLE design DROP COLUMN board_version")
+                    )
+                self.assertNotIn(
+                    "board_version",
+                    {
+                        column["name"]
+                        for column in inspect(db.engine).get_columns("design")
+                    },
+                )
+                db.session.remove()
+                db.engine.dispose()
+
+            upgraded = create_app(
+                {
+                    "TESTING": True,
+                    "SECRET_KEY": "upgraded-schema-key",
+                    "SQLALCHEMY_DATABASE_URI": database_uri,
+                    "WTF_CSRF_ENABLED": False,
+                }
+            )
+            with upgraded.app_context():
+                self.assertIn(
+                    "board_version",
+                    {
+                        column["name"]
+                        for column in inspect(db.engine).get_columns("design")
+                    },
+                )
+                db.session.remove()
+                db.engine.dispose()
 
 
 if __name__ == "__main__":

@@ -55,6 +55,8 @@ BOARD_TYPES = {
     "swatch",
     "reference",
 }
+BOARD_WIDTH = 4000
+BOARD_HEIGHT = 3000
 DOSSIER_FIELDS = (
     "problem",
     "proposed_solution",
@@ -283,10 +285,12 @@ def _validate_board(payload):
         except (TypeError, ValueError):
             return None, "A concept board element has invalid geometry."
         if not (
-            -10000 <= x <= 10000
-            and -10000 <= y <= 10000
+            0 <= x
+            and 0 <= y
             and 20 <= width <= 4000
             and 20 <= height <= 4000
+            and x + width <= BOARD_WIDTH
+            and y + height <= BOARD_HEIGHT
             and -1000 <= z <= 1000
         ):
             return None, "A concept board element is outside the allowed bounds."
@@ -588,15 +592,59 @@ def save_board(design_id):
     design = db.get_or_404(Design, design_id)
     _require_team_member(design)
     _require_mutable(design)
-    elements, error = _validate_board(request.get_json(silent=True))
+    payload = request.get_json(silent=True)
+    elements, error = _validate_board(payload)
     if error:
         return jsonify({"ok": False, "error": error}), 400
+    base_version = payload.get("base_version")
+    if (
+        isinstance(base_version, bool)
+        or not isinstance(base_version, int)
+        or base_version < 0
+    ):
+        return jsonify(
+            {"ok": False, "error": "The board save version is invalid."}
+        ), 400
+
     if design.stage in ("Approved", "Rejected"):
         _change_stage(design, "Exploring", "Concept board reopened after review.")
-    design.board_state = json.dumps(elements, separators=(",", ":"))
-    design.updated_at = datetime.now(timezone.utc)
+
+    saved_at = datetime.now(timezone.utc)
+    update_result = db.session.execute(
+        db.update(Design)
+        .where(
+            Design.id == design.id,
+            Design.board_version == base_version,
+        )
+        .values(
+            board_state=json.dumps(elements, separators=(",", ":")),
+            board_version=base_version + 1,
+            updated_at=saved_at,
+        )
+    )
+    if update_result.rowcount != 1:
+        db.session.rollback()
+        current_version = db.session.scalar(
+            db.select(Design.board_version).where(Design.id == design.id)
+        )
+        return jsonify(
+            {
+                "ok": False,
+                "error": (
+                    "This board changed in another session. "
+                    "Refresh before making more changes."
+                ),
+                "board_version": current_version,
+            }
+        ), 409
     db.session.commit()
-    return jsonify({"ok": True, "saved_at": design.updated_at.isoformat()})
+    return jsonify(
+        {
+            "ok": True,
+            "saved_at": saved_at.isoformat(),
+            "board_version": base_version + 1,
+        }
+    )
 
 
 @design_lab_bp.post("/design-lab/<int:design_id>/revisions")

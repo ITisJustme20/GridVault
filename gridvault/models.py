@@ -296,6 +296,7 @@ class Design(db.Model):
     revision_number = db.Column(db.Integer, nullable=False, default=1)
     published_revision_number = db.Column(db.Integer)
     board_state = db.Column(db.Text, nullable=False, default="[]")
+    board_version = db.Column(db.Integer, nullable=False, default=0)
     cover_filename = db.Column(db.String(255))
     project_id = db.Column(
         db.Integer,
