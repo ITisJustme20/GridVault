@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}Access authorization | GridVault{% endblock %}
+{% block body_class %}auth-page access-gate-page{% endblock %}
+
+{% block auth_content %}
+    <p class="auth-wordmark">GRIDVAULT</p>
+    <h1>ACCESS AUTHORIZATION REQUIRED</h1>
+    <p class="auth-subtitle">Enter the authorization issued by a GridVault administrator.</p>
+
+    <form method="post" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="username">Callsign</label>
+        <input id="username" name="username" type="text" minlength="3" maxlength="30" autocomplete="username" placeholder="Letters, numbers, underscores" required autofocus>
+
+        <label for="invite-code">Invite Code</label>
+        <input id="invite-code" name="invite_code" type="text" maxlength="64" autocomplete="one-time-code" placeholder="Authorization code" required>
+
+        <label for="password">Passphrase</label>
+        <input id="password" name="password" type="password" minlength="12" maxlength="256" autocomplete="new-password" placeholder="At least 12 characters" required>
+
+        <label for="confirm-password">Confirm Passphrase</label>
+        <input id="confirm-password" name="confirm_password" type="password" minlength="12" maxlength="256" autocomplete="new-password" placeholder="Repeat your passphrase" required>
+
+        <button class="primary-button" type="submit">ENTER THE GRID</button>
+    </form>
+
+    <p class="auth-switch">Already authorized? <a href="{{ url_for('auth.login') }}">Identity verification</a></p>
+{% endblock %}

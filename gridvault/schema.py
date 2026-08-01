@@ -27,6 +27,29 @@ def _add_missing_design_columns() -> None:
             )
 
 
+def _add_missing_user_columns() -> None:
+    """Add access-control flags while preserving legacy operator behavior."""
+    inspector = inspect(db.engine)
+    if "user" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("user")}
+    with db.engine.begin() as connection:
+        if "is_admin" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE user ADD COLUMN is_admin "
+                    "BOOLEAN NOT NULL DEFAULT 0"
+                )
+            )
+        if "has_seen_orientation" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE user ADD COLUMN has_seen_orientation "
+                    "BOOLEAN NOT NULL DEFAULT 1"
+                )
+            )
+
+
 def _add_missing_message_columns() -> None:
     """Add the nullable conversation link without rewriting legacy messages."""
     inspector = inspect(db.engine)
@@ -71,6 +94,7 @@ def ensure_schema(app) -> None:
 
     with app.app_context():
         db.create_all()
+        _add_missing_user_columns()
         _add_missing_message_columns()
         _add_missing_design_columns()
         _associate_grid_history()

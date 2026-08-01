@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}Access Control | GridVault{% endblock %}
+{% block topbar_title %}Access Control{% endblock %}
+
+{% block content %}
+<section class="access-control-header">
+    <div>
+        <p class="eyebrow">Administrator authority</p>
+        <h1>Access Control</h1>
+        <p>Issue and revoke one-time GridVault authorizations. Codes are never recoverable after leaving this screen.</p>
+    </div>
+</section>
+
+{% if new_invite_code %}
+<section class="invite-reveal" aria-labelledby="invite-reveal-title">
+    <p class="eyebrow">Shown once</p>
+    <h2 id="invite-reveal-title">New authorization code</h2>
+    <p>Copy this code now. GridVault stores only its cryptographic hash.</p>
+    <div class="invite-code-row">
+        <code id="new-invite-code">{{ new_invite_code }}</code>
+        <button class="secondary-button" type="button" data-copy-target="new-invite-code">Copy code</button>
+    </div>
+    <p class="copy-status" data-copy-status aria-live="polite"></p>
+</section>
+{% endif %}
+
+<div class="access-control-grid">
+    <section class="console-panel invite-create-panel">
+        <p class="eyebrow">Issue authorization</p>
+        <h2>Create invite</h2>
+        <form method="post" action="{{ url_for('access_control.create_invitation') }}" class="access-control-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="reserved-callsign">Reserved callsign <span>Optional</span></label>
+            <input id="reserved-callsign" name="reserved_callsign" type="text" minlength="3" maxlength="30" autocomplete="off" placeholder="Letters, numbers, underscores">
+            <label for="expiration">Expiration</label>
+            <select id="expiration" name="expiration">
+                <option value="24h">24 hours</option>
+                <option value="7d">7 days</option>
+                <option value="30d">30 days</option>
+                <option value="none">No expiration</option>
+            </select>
+            <button class="primary-button" type="submit">Generate one-time code</button>
+        </form>
+    </section>
+
+    <section class="console-panel operator-roster-panel">
+        <p class="eyebrow">Existing identities</p>
+        <h2>Operators</h2>
+        <div class="operator-roster">
+            {% for operator in operators %}
+                <div><strong>{{ operator.username }}</strong><span>{{ 'Administrator' if is_gridvault_admin(operator) else 'Operator' }}</span></div>
+            {% else %}
+                <p class="empty-state">No operator identities found.</p>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+
+<section class="invite-ledger">
+    <div class="section-heading"><div><p class="eyebrow">Authorization ledger</p><h2>Invitations</h2></div></div>
+    {% for status, invitations in grouped_invitations.items() %}
+        <details class="invite-status-group" {{ 'open' if status == 'Active' else '' }}>
+            <summary><span>{{ status }}</span><strong>{{ invitations|length }}</strong></summary>
+            <div class="invite-table-wrap">
+                <table class="invite-table">
+                    <thead><tr><th>Reference</th><th>Reserved for</th><th>Created by</th><th>Created</th><th>Expires</th><th>Used by</th><th>Action</th></tr></thead>
+                    <tbody>
+                    {% for invite in invitations %}
+                        <tr>
+                            <td><code>{{ invitation_label(invite) }}</code></td>
+                            <td>{{ invite.reserved_callsign or 'Any valid callsign' }}</td>
+                            <td>{{ invite.creator.username }}</td>
+                            <td>{{ invite.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</td>
+                            <td>{{ invite.expires_at.strftime('%Y-%m-%d %H:%M') ~ ' UTC' if invite.expires_at else 'No expiration' }}</td>
+                            <td>{{ invite.used_by.username if invite.used_by else '—' }}</td>
+                            <td>
+                                {% if invite.status == 'Active' %}
+                                <form method="post" action="{{ url_for('access_control.revoke_invitation', public_id=invite.public_id) }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button class="text-button danger-text" type="submit">Revoke</button>
+                                </form>
+                                {% else %}<span class="muted-value">Final</span>{% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="7" class="empty-state">No {{ status|lower }} authorizations.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    {% endfor %}
+</section>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/access_control.js') }}" defer></script>{% endblock %}

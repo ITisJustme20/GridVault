@@ -13,7 +13,15 @@ GridVault is a secure, authenticated mission workspace for small teams. The Miss
 - **Archive** — staged operational memory
 - **Settings** — staged operator and workspace controls
 
-Every application route requires an authenticated callsign except registration and login. The legacy `/chat` URL remains available alongside `/hub`.
+Every workspace route requires an authenticated callsign. Existing operators use `/login`; new operators must use a valid one-time administrator authorization at `/access`. The legacy `/register` route cannot create accounts and redirects to the Access Gate. The legacy `/chat` URL remains available alongside `/hub`.
+
+## Access Gate
+
+GridVault is invitation-only. Administrators can open **Access Control** from the authenticated navigation to create a cryptographically random one-time code, optionally reserve it for a callsign, choose a 24-hour, 7-day, 30-day, or unlimited lifetime, and revoke an unused authorization. The plaintext code is displayed only in the creation response; the database retains only its SHA-256 hash and a short safe ledger reference.
+
+Administrator access uses the additive `User.is_admin` flag. Existing installations can bootstrap selected established operators without rewriting database rows by setting `GRIDVAULT_ADMIN_CALLSIGNS` to a comma-separated list of callsigns. Configure that list only in the deployment environment, never in source control.
+
+Invitation consumption validates and normalizes the callsign, hashes the passphrase with Werkzeug's established password hashing, and atomically changes the authorization from Active to Used in the same database transaction that creates the user. A conditional update prevents two concurrent requests from consuming the same code. Newly invited operators see one concise orientation screen; existing users retain their normal login and do not see it.
 
 ## Project Vault
 
@@ -77,6 +85,7 @@ GridVault is then available at `http://localhost:5000`.
 | `GRIDVAULT_ENV` | Set to `production` for strict secret validation and secure cookies | `development` |
 | `DATABASE_URL` | SQLAlchemy database connection | `sqlite:///gridvault.db` |
 | `SOCKETIO_CORS_ALLOWED_ORIGINS` | Optional comma-separated trusted browser origins | Same-origin only |
+| `GRIDVAULT_ADMIN_CALLSIGNS` | Comma-separated existing callsigns allowed to manage invitations | Empty |
 | `DESIGN_UPLOAD_FOLDER` | Private Design Lab image storage | `instance/design_uploads/` |
 | `DESIGN_UPLOAD_MAX_BYTES` | Per-image upload limit | 5 MB |
 | `GRIDVAULT_DEBUG` | Opt into the Flask debugger and reloader for local development | Disabled |
@@ -87,7 +96,7 @@ For production, set both `GRIDVAULT_ENV=production` and a strong `SECRET_KEY`. N
 
 The application factory explicitly keeps Flask's instance directory at `instance/`, and the `User` and `Message` models retain their original table and column names. Existing `instance/gridvault.db` files therefore continue to provide the same user accounts and stored messages after upgrading.
 
-GridVault uses an additive schema strategy: `ensure_schema()` calls SQLAlchemy's check-first table creation to create only missing Project Vault and Design Lab tables and indexes. It never drops, rewrites, or renames the existing `user` or `message` tables. The automated suite validates this strategy against a temporary legacy-format database before releases are merged.
+GridVault uses an additive schema strategy: `ensure_schema()` calls SQLAlchemy's check-first table creation to create only missing tables and indexes, including the invitation ledger. It adds only the defaulted `is_admin` and `has_seen_orientation` columns to legacy users; existing accounts default to already oriented. It never drops, rewrites, or renames the existing `user` or `message` tables. The automated suite validates this strategy against a temporary legacy-format database before releases are merged.
 
 The entire `instance/` directory plus common SQLite extensions are ignored. Do not commit a database file.
 
@@ -120,9 +129,10 @@ node --test tests/js/*.test.js
 node --check gridvault/static/js/design_board_core.js
 node --check gridvault/static/js/design_board.js
 node --check gridvault/static/js/chat.js
+node --check gridvault/static/js/access_control.js
 ```
 
-The suite verifies authentication, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
+The suite verifies invitation-only authentication, atomic single-use authorization, administrator permissions, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
 
 ## Production serving
 
