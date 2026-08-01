@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from sqlalchemy import inspect
+from werkzeug.security import generate_password_hash
 
 from gridvault import create_app
 from gridvault.extensions import db
@@ -38,15 +39,10 @@ class ProjectVaultTestCase(unittest.TestCase):
             db.drop_all()
 
     def register(self, callsign, password="secure-passphrase"):
-        return self.client.post(
-            "/register",
-            data={
-                "username": callsign,
-                "password": password,
-                "confirm_password": password,
-            },
-            follow_redirects=True,
-        )
+        with self.app.app_context():
+            db.session.add(User(username=callsign, password_hash=generate_password_hash(password)))
+            db.session.commit()
+        return self.login(callsign, password)
 
     def login(self, callsign, password="secure-passphrase"):
         return self.client.post(
@@ -340,6 +336,13 @@ class ProjectVaultTestCase(unittest.TestCase):
                     for column in inspect(db.engine).get_columns("design")
                 }
                 self.assertIn("board_version", design_columns)
+                user_columns = {
+                    column["name"]
+                    for column in inspect(db.engine).get_columns("user")
+                }
+                self.assertTrue({"is_admin", "has_seen_orientation"}.issubset(user_columns))
+                self.assertIn("invitation", table_names)
+                self.assertTrue(db.session.get(User, 1).has_seen_orientation)
                 db.session.remove()
                 db.engine.dispose()
 

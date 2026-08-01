@@ -40,6 +40,12 @@
                         <span>The Hub</span>
                         <span class="live-dot" title="Live module"></span>
                     </a>
+                    {% if is_gridvault_admin(current_user) %}
+                    <a href="{{ url_for('access_control.index') }}" class="{{ 'active' if request.blueprint == 'access_control' else '' }}">
+                        <span class="nav-code">AC</span>
+                        <span>Access Control</span>
+                    </a>
+                    {% endif %}
 
                     <p class="nav-label">Workspaces</p>
                     {% set current_module = request.view_args.get('module_slug') if request.view_args else none %}
@@ -108,17 +114,17 @@
         </div>
     {% else %}
         <div class="auth-shell">
-            <section class="auth-brand-panel" aria-label="GridVault introduction">
+            <section class="auth-brand-panel" aria-label="GridVault private system">
                 <a class="brand auth-brand" href="{{ url_for('auth.login') }}">
                     <span class="brand-mark" aria-hidden="true">GV</span>
                     <span><strong>GridVault</strong><small>Mission OS</small></span>
                 </a>
-                <div class="auth-pitch">
-                    <p class="eyebrow">Secure coordination layer</p>
-                    <h1>One grid.<br>Every mission.</h1>
-                    <p>Coordinate operators, preserve mission context, and move decisive work forward from a single command surface.</p>
+                <div class="auth-pitch access-notice">
+                    <p class="eyebrow">Private system</p>
+                    <h1>AUTHORIZED<br>ACCESS ONLY</h1>
+                    <p>GridVault accounts require a one-time authorization issued by an administrator.</p>
                 </div>
-                <div class="auth-signal"><span class="status-beacon"></span> Encrypted session perimeter ready</div>
+                <div class="auth-signal"><span class="status-beacon"></span> Access is monitored and restricted</div>
             </section>
             <main class="auth-main">
                 <div class="auth-card">

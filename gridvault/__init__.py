@@ -67,12 +67,14 @@ def create_app(test_config: dict | None = None) -> Flask:
     login_manager.login_message = "Please log in to enter GridVault."
     login_manager.login_message_category = "warning"
 
+    from .blueprints.access_control import access_control_bp
     from .blueprints.auth import auth_bp
     from .blueprints.console import console_bp
     from .blueprints.design_lab import design_lab_bp
     from .blueprints.hub import hub_bp
     from .blueprints.modules import modules_bp
     from .blueprints.projects import projects_bp
+    from .invitations import is_gridvault_admin
     from .models import User
     from .schema import ensure_schema
     from . import realtime  # noqa: F401 - registers Socket.IO handlers
@@ -85,11 +87,14 @@ def create_app(test_config: dict | None = None) -> Flask:
             return None
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(access_control_bp)
     app.register_blueprint(console_bp)
     app.register_blueprint(hub_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(design_lab_bp)
     app.register_blueprint(modules_bp)
+
+    app.jinja_env.globals["is_gridvault_admin"] = is_gridvault_admin
 
     @app.after_request
     def add_security_headers(response):

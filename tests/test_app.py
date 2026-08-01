@@ -1,5 +1,7 @@
 import unittest
 
+from werkzeug.security import generate_password_hash
+
 from gridvault import create_app
 from gridvault.extensions import db, socketio
 from gridvault.models import Message, User
@@ -27,31 +29,28 @@ class GridVaultTestCase(unittest.TestCase):
             db.drop_all()
 
     def register(self, callsign="VEGA_7", password="secure-passphrase"):
-        return self.client.post(
-            "/register",
-            data={
-                "username": callsign,
-                "password": password,
-                "confirm_password": password,
-            },
-            follow_redirects=True,
-        )
+        with self.app.app_context():
+            db.session.add(User(username=callsign, password_hash=generate_password_hash(password)))
+            db.session.commit()
+        return self.client.post("/login", data={"username": callsign, "password": password}, follow_redirects=True)
 
     def test_mission_console_requires_authentication(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login", response.headers["Location"])
 
-    def test_registration_lands_on_console_and_hashes_password(self):
-        response = self.register()
+    def test_public_registration_redirects_to_access_gate(self):
+        response = self.client.post(
+            "/register",
+            data={"username": "VEGA_7", "password": "secure-passphrase"},
+            follow_redirects=True,
+        )
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Mission Console", response.data)
-        self.assertIn(b"VEGA_7", response.data)
+        self.assertIn(b"ACCESS AUTHORIZATION REQUIRED", response.data)
 
         with self.app.app_context():
             user = db.session.scalar(db.select(User).where(User.username == "VEGA_7"))
-            self.assertIsNotNone(user)
-            self.assertNotEqual(user.password_hash, "secure-passphrase")
+            self.assertIsNone(user)
 
     def test_existing_operator_can_log_in(self):
         self.register("ORBIT_2")

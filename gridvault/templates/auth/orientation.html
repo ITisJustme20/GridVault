@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block title %}Access granted | GridVault{% endblock %}
+{% block topbar_title %}Access Granted{% endblock %}
+
+{% block content %}
+<section class="orientation-panel">
+    <p class="eyebrow">First entry</p>
+    <h1>ACCESS GRANTED</h1>
+    <p>Your callsign identifies you inside GridVault.</p>
+    <dl>
+        <div><dt>GRID</dt><dd>The shared conversation.</dd></div>
+        <div><dt>DIRECT</dt><dd>Private one-to-one communication.</dd></div>
+        <div><dt>GROUPS</dt><dd>Private invited conversations.</dd></div>
+        <div><dt>VC BOARD</dt><dd>The visual planning workspace.</dd></div>
+    </dl>
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="primary-button" type="submit">CONTINUE</button>
+    </form>
+</section>
+{% endblock %}

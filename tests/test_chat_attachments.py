@@ -47,15 +47,10 @@ class ChatAttachmentTestCase(unittest.TestCase):
 
     def register(self, callsign):
         client = self.app.test_client()
-        response = client.post(
-            "/register",
-            data={
-                "username": callsign,
-                "password": "secure-passphrase",
-                "confirm_password": "secure-passphrase",
-            },
-            follow_redirects=True,
-        )
+        with self.app.app_context():
+            db.session.add(User(username=callsign, password_hash=generate_password_hash("secure-passphrase")))
+            db.session.commit()
+        response = client.post("/login", data={"username": callsign, "password": "secure-passphrase"}, follow_redirects=True)
         self.assertEqual(response.status_code, 200)
         return client
 

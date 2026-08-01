@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from sqlalchemy import inspect, text
+from werkzeug.security import generate_password_hash
 
 from gridvault import create_app
 from gridvault.extensions import db
@@ -41,15 +42,10 @@ class DesignLabTestCase(unittest.TestCase):
         self.uploads.cleanup()
 
     def register(self, username):
-        return self.client.post(
-            "/register",
-            data={
-                "username": username,
-                "password": "secure-passphrase",
-                "confirm_password": "secure-passphrase",
-            },
-            follow_redirects=True,
-        )
+        with self.app.app_context():
+            db.session.add(User(username=username, password_hash=generate_password_hash("secure-passphrase")))
+            db.session.commit()
+        return self.login(username)
 
     def login(self, username):
         return self.client.post(

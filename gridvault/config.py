@@ -25,6 +25,10 @@ class Config:
     SOCKETIO_CORS_ALLOWED_ORIGINS = os.environ.get(
         "SOCKETIO_CORS_ALLOWED_ORIGINS",
     )
+    GRIDVAULT_ADMIN_CALLSIGNS = os.environ.get(
+        "GRIDVAULT_ADMIN_CALLSIGNS",
+        "",
+    )
     DESIGN_UPLOAD_FOLDER = os.environ.get("DESIGN_UPLOAD_FOLDER")
     DESIGN_UPLOAD_MAX_BYTES = int(
         os.environ.get("DESIGN_UPLOAD_MAX_BYTES", 5 * 1024 * 1024)

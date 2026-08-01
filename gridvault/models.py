@@ -43,6 +43,8 @@ class User(UserMixin, db.Model):
         index=True,
     )
     password_hash = db.Column(db.String(255), nullable=False)
+    is_admin = db.Column(db.Boolean, nullable=False, default=False)
+    has_seen_orientation = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(
         db.DateTime,
         nullable=False,
@@ -54,6 +56,52 @@ class User(UserMixin, db.Model):
         backref="author",
         lazy=True,
         cascade="all, delete-orphan",
+    )
+
+
+class Invitation(db.Model):
+    __table_args__ = (
+        db.CheckConstraint(
+            "status IN ('Active', 'Used', 'Expired', 'Revoked')",
+            name="ck_invitation_status",
+        ),
+        db.Index("idx_invitation_status_created", "status", "created_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(32), nullable=False, unique=True, index=True)
+    code_hash = db.Column(db.String(64), nullable=False, unique=True, index=True)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    expires_at = db.Column(db.DateTime)
+    status = db.Column(db.String(10), nullable=False, default="Active", index=True)
+    reserved_callsign = db.Column(db.String(30))
+    creator_admin_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False,
+        index=True,
+    )
+    used_at = db.Column(db.DateTime)
+    used_by_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        unique=True,
+    )
+    revoked_at = db.Column(db.DateTime)
+
+    creator = db.relationship(
+        "User",
+        foreign_keys=[creator_admin_id],
+        backref=db.backref("created_invitations", lazy=True),
+    )
+    used_by = db.relationship(
+        "User",
+        foreign_keys=[used_by_user_id],
+        backref=db.backref("consumed_invitation", uselist=False),
     )
 
 
