@@ -47,7 +47,8 @@
                         ('design-lab', 'Design Lab', 'DL'),
                         ('engineering-bay', 'Engineering Bay', 'EB')
                     ] %}
-                        <a href="{{ url_for('modules.placeholder', module_slug=slug) }}" class="{{ 'active' if current_module == slug else '' }}">
+                        {% set workspace_url = url_for('design_lab.index') if slug == 'design-lab' else url_for('modules.placeholder', module_slug=slug) %}
+                        <a href="{{ workspace_url }}" class="{{ 'active' if (slug == 'design-lab' and request.blueprint == 'design_lab') or current_module == slug else '' }}">
                             <span class="nav-code">{{ code }}</span>
                             <span>{{ label }}</span>
                         </a>

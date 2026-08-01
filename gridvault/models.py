@@ -22,6 +22,15 @@ PROJECT_STATUSES = (
     "Archived",
 )
 
+DESIGN_STAGES = (
+    "Concept",
+    "Exploring",
+    "In Review",
+    "Approved",
+    "Rejected",
+    "Archived",
+)
+
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -230,3 +239,249 @@ class ProjectComment(db.Model):
 
     project = db.relationship("Project", back_populates="comments")
     author = db.relationship("User")
+
+
+design_collaborator = db.Table(
+    "design_collaborator",
+    db.Column(
+        "design_id",
+        db.Integer,
+        db.ForeignKey("design.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    db.Column(
+        "user_id",
+        db.Integer,
+        db.ForeignKey("user.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    db.Column(
+        "assigned_at",
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    ),
+)
+
+
+class Design(db.Model):
+    __table_args__ = (
+        db.CheckConstraint(
+            "stage IN ('Concept', 'Exploring', 'In Review', 'Approved', "
+            "'Rejected', 'Archived')",
+            name="ck_design_stage",
+        ),
+        db.Index("idx_design_stage_updated", "stage", "updated_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    codename = db.Column(
+        db.String(40, collation="NOCASE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+    title = db.Column(db.String(120), nullable=False)
+    problem = db.Column(db.Text, nullable=False)
+    proposed_solution = db.Column(db.Text, nullable=False)
+    intended_user = db.Column(db.String(300), nullable=False)
+    design_goals = db.Column(db.Text, nullable=False)
+    constraints = db.Column(db.Text, nullable=False, default="")
+    materials = db.Column(db.Text, nullable=False, default="")
+    dimensions = db.Column(db.String(500), nullable=False, default="")
+    components = db.Column(db.Text, nullable=False, default="")
+    risks = db.Column(db.Text, nullable=False, default="")
+    references = db.Column(db.Text, nullable=False, default="")
+    stage = db.Column(db.String(20), nullable=False, default="Concept")
+    revision_number = db.Column(db.Integer, nullable=False, default=1)
+    published_revision_number = db.Column(db.Integer)
+    board_state = db.Column(db.Text, nullable=False, default="[]")
+    cover_filename = db.Column(db.String(255))
+    project_id = db.Column(
+        db.Integer,
+        db.ForeignKey("project.id"),
+        index=True,
+    )
+    creator_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False,
+        index=True,
+    )
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+    project = db.relationship(
+        "Project",
+        backref=db.backref("designs", lazy=True),
+    )
+    creator = db.relationship(
+        "User",
+        foreign_keys=[creator_id],
+        backref=db.backref("created_designs", lazy=True),
+    )
+    collaborators = db.relationship(
+        "User",
+        secondary=design_collaborator,
+        backref=db.backref("collaborative_designs", lazy=True),
+        order_by="User.username",
+    )
+    revisions = db.relationship(
+        "DesignRevision",
+        back_populates="design",
+        cascade="all, delete-orphan",
+    )
+    comments = db.relationship(
+        "DesignReviewComment",
+        back_populates="design",
+        cascade="all, delete-orphan",
+    )
+    status_history = db.relationship(
+        "DesignStatusHistory",
+        back_populates="design",
+        cascade="all, delete-orphan",
+    )
+    activities = db.relationship(
+        "DesignActivity",
+        back_populates="design",
+        cascade="all, delete-orphan",
+    )
+    assets = db.relationship(
+        "DesignAsset",
+        back_populates="design",
+        cascade="all, delete-orphan",
+    )
+
+
+class DesignRevision(db.Model):
+    __table_args__ = (
+        db.UniqueConstraint(
+            "design_id",
+            "revision_number",
+            name="uq_design_revision_number",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    design_id = db.Column(
+        db.Integer,
+        db.ForeignKey("design.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    revision_number = db.Column(db.Integer, nullable=False)
+    snapshot = db.Column(db.Text, nullable=False)
+    change_note = db.Column(db.String(500), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    design = db.relationship("Design", back_populates="revisions")
+    author = db.relationship("User")
+
+
+class DesignReviewComment(db.Model):
+    __table_args__ = (
+        db.Index(
+            "idx_design_review_comment_created",
+            "design_id",
+            "created_at",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    design_id = db.Column(
+        db.Integer,
+        db.ForeignKey("design.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    revision_number = db.Column(db.Integer, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    body = db.Column(db.String(1000), nullable=False)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    design = db.relationship("Design", back_populates="comments")
+    author = db.relationship("User")
+
+
+class DesignStatusHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    design_id = db.Column(
+        db.Integer,
+        db.ForeignKey("design.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    from_stage = db.Column(db.String(20))
+    to_stage = db.Column(db.String(20), nullable=False)
+    note = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    design = db.relationship("Design", back_populates="status_history")
+    actor = db.relationship("User")
+
+
+class DesignActivity(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    design_id = db.Column(
+        db.Integer,
+        db.ForeignKey("design.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    actor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    action = db.Column(db.String(40), nullable=False)
+    detail = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    design = db.relationship("Design", back_populates="activities")
+    actor = db.relationship("User")
+
+
+class DesignAsset(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    design_id = db.Column(
+        db.Integer,
+        db.ForeignKey("design.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    uploader_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    original_filename = db.Column(db.String(255), nullable=False)
+    stored_filename = db.Column(db.String(255), unique=True, nullable=False)
+    mime_type = db.Column(db.String(40), nullable=False)
+    byte_size = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    design = db.relationship("Design", back_populates="assets")
+    uploader = db.relationship("User")

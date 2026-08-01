@@ -41,6 +41,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         )
 
     instance_path.mkdir(parents=True, exist_ok=True)
+    if not app.config.get("DESIGN_UPLOAD_FOLDER"):
+        app.config["DESIGN_UPLOAD_FOLDER"] = str(instance_path / "design_uploads")
+    app.config.setdefault("DESIGN_UPLOAD_MAX_BYTES", 5 * 1024 * 1024)
+    app.config.setdefault("MAX_CONTENT_LENGTH", 6 * 1024 * 1024)
 
     db.init_app(app)
     login_manager.init_app(app)
@@ -59,6 +63,7 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     from .blueprints.auth import auth_bp
     from .blueprints.console import console_bp
+    from .blueprints.design_lab import design_lab_bp
     from .blueprints.hub import hub_bp
     from .blueprints.modules import modules_bp
     from .blueprints.projects import projects_bp
@@ -77,6 +82,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(console_bp)
     app.register_blueprint(hub_bp)
     app.register_blueprint(projects_bp)
+    app.register_blueprint(design_lab_bp)
     app.register_blueprint(modules_bp)
 
     @app.after_request

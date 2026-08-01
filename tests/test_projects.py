@@ -321,7 +321,17 @@ class ProjectVaultTestCase(unittest.TestCase):
                 self.assertEqual(db.session.get(Message, 1).body, "Preserve this signal.")
                 table_names = set(inspect(db.engine).get_table_names())
                 self.assertTrue(
-                    {"project", "project_activity", "project_comment"}.issubset(
+                    {
+                        "project",
+                        "project_activity",
+                        "project_comment",
+                        "design",
+                        "design_revision",
+                        "design_review_comment",
+                        "design_status_history",
+                        "design_activity",
+                        "design_asset",
+                    }.issubset(
                         table_names
                     )
                 )

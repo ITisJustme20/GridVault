@@ -30,6 +30,13 @@
         </dl>
     </section>
 
+    {% if project.designs %}
+        <section class="panel detail-panel project-designs-panel">
+            <div class="section-heading"><div><p class="eyebrow">Design Lab</p><h2>Linked design dossiers</h2></div><span class="section-note">{{ project.designs|length }} total</span></div>
+            <div class="linked-design-list">{% for design in project.designs %}<a href="{{ url_for('design_lab.detail', design_id=design.id) }}"><span class="project-codename">{{ design.codename }}</span><div><strong>{{ design.title }}</strong><small>Revision {{ design.revision_number }} · {{ design.stage }}</small></div><span>→</span></a>{% endfor %}</div>
+        </section>
+    {% endif %}
+
     <div class="project-detail-grid">
         <div class="project-detail-main">
             <section class="panel detail-panel">
