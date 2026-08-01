@@ -41,6 +41,9 @@
             <span class="metric-icon">PV</span>
             <div><p>Active projects</p><strong>{{ active_project_count }}</strong><small>In active execution</small></div>
         </article>
+        <article class="metric-card"><span class="metric-icon">DL</span><div><p>Total designs</p><strong>{{ total_design_count }}</strong><small>Across Design Lab</small></div></article>
+        <article class="metric-card"><span class="metric-icon">RV</span><div><p>Designs under review</p><strong>{{ design_review_count }}</strong><small>Awaiting collaborator decision</small></div></article>
+        <article class="metric-card metric-live"><span class="metric-icon">AP</span><div><p>Approved designs</p><strong>{{ approved_design_count }}</strong><small>Published dossiers</small></div></article>
     </section>
 
     <div class="dashboard-grid">
@@ -58,10 +61,10 @@
                     ('archive', 'AR', 'Archive', 'Completed missions and operational memory.'),
                     ('settings', 'ST', 'Settings', 'Operator and workspace controls.')
                 ] %}
-                    {% set module_url = url_for('projects.index') if slug == 'project-vault' else url_for('modules.placeholder', module_slug=slug) %}
+                    {% set module_url = url_for('projects.index') if slug == 'project-vault' else (url_for('design_lab.index') if slug == 'design-lab' else url_for('modules.placeholder', module_slug=slug)) %}
                     <a class="module-card" href="{{ module_url }}">
                         <span class="module-code">{{ code }}</span>
-                        <span class="module-status">Staged</span>
+                        <span class="module-status">{{ 'Live' if slug in ('project-vault', 'design-lab') else 'Staged' }}</span>
                         <h3>{{ title }}</h3>
                         <p>{{ description }}</p>
                         <span class="module-link">Enter module <span aria-hidden="true">↗</span></span>
@@ -71,6 +74,10 @@
         </section>
 
         <aside class="panel activity-panel">
+            <div class="section-heading"><div><p class="eyebrow">Design Lab</p><h2>Recent design activity</h2></div></div>
+            {% if recent_design_activity %}<ol class="signal-list">{% for activity in recent_design_activity %}<li><span class="signal-avatar">{{ activity.design.codename[:2]|upper }}</span><div><strong>{{ activity.design.codename }}</strong><p>{{ activity.detail }}</p><time>{{ activity.actor.username }} · {{ activity.created_at.strftime('%b %d · %I:%M %p') }}</time></div></li>{% endfor %}</ol>{% else %}<p class="detail-empty">No Design Lab activity yet.</p>{% endif %}
+            <a class="text-link" href="{{ url_for('design_lab.index') }}">Open Design Lab <span aria-hidden="true">→</span></a>
+            <div class="activity-divider"></div>
             <div class="section-heading">
                 <div><p class="eyebrow">Project Vault</p><h2>Recent activity</h2></div>
             </div>

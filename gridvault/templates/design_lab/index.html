@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Design Lab | GridVault{% endblock %}
+{% block topbar_title %}Design Lab{% endblock %}
+{% block content %}
+<section class="design-gallery-hero">
+    <div><p class="eyebrow">Visual development / DL-02</p><h1>Design Gallery</h1><p>Develop ideas on a collaborative concept board, then publish approved work as a polished mission dossier.</p></div>
+    <a class="primary-button" href="{{ url_for('design_lab.create') }}">New design <span aria-hidden="true">＋</span></a>
+</section>
+<section class="vault-controls panel">
+    <form class="vault-search" method="get" role="search">
+        <label class="sr-only" for="design-search">Search designs</label><input id="design-search" name="q" type="search" maxlength="100" value="{{ search_query }}" placeholder="Search codename, title, problem, or solution">
+        <label class="sr-only" for="design-stage">Filter by stage</label><select id="design-stage" name="stage"><option value="">Open designs</option>{% for stage in stages %}<option value="{{ stage }}" {{ 'selected' if stage_filter == stage else '' }}>{{ stage }} ({{ counts.get(stage, 0) }})</option>{% endfor %}</select>
+        <button class="secondary-button" type="submit">Apply filters</button>{% if search_query or stage_filter %}<a class="clear-filter" href="{{ url_for('design_lab.index') }}">Clear</a>{% endif %}
+    </form>
+</section>
+<div class="vault-summary"><span><strong>{{ designs|length }}</strong> matching design{{ '' if designs|length == 1 else 's' }}</span>{% if stage_filter %}<span class="status-pill">{{ stage_filter }}</span>{% endif %}</div>
+{% if designs %}
+<section class="design-gallery" aria-label="Design gallery">
+    {% for design in designs %}
+    <a class="design-card" href="{{ url_for('design_lab.detail', design_id=design.id) }}">
+        <div class="design-cover {% if not design.cover_filename %}design-cover-empty{% endif %}">{% if design.cover_filename %}<img src="{{ url_for('design_lab.asset', design_id=design.id, filename=design.cover_filename) }}" alt="Cover for {{ design.title }}">{% else %}<span>{{ design.codename[:2] }}</span><small>Concept dossier</small>{% endif %}<span class="design-revision">REV {{ '%02d'|format(design.revision_number) }}</span></div>
+        <div class="design-card-body"><div class="project-card-top"><span class="project-codename">{{ design.codename }}</span><span class="status-pill design-stage-{{ design.stage|lower|replace(' ', '-') }}">{{ design.stage }}</span></div><h2>{{ design.title }}</h2><p>{{ design.problem }}</p><dl><div><dt>Creator</dt><dd>{{ design.creator.username }}</dd></div><div><dt>Project</dt><dd>{{ design.project.codename if design.project else 'Independent' }}</dd></div></dl><div class="project-card-footer"><span>Updated {{ design.updated_at.strftime('%b %d, %Y · %I:%M %p') }}</span><span>Open dossier →</span></div></div>
+    </a>
+    {% endfor %}
+</section>
+{% else %}<section class="panel vault-empty"><span>DL</span><h2>No matching designs.</h2><p>Start a visual concept and build its mission dossier.</p><a class="primary-button" href="{{ url_for('design_lab.create') }}">Create first design</a></section>{% endif %}
+{% endblock %}

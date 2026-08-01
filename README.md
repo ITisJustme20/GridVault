@@ -6,7 +6,7 @@ GridVault is a secure, authenticated mission workspace for small teams. The Miss
 
 - **Mission Console** — authenticated landing page with system metrics, recent signals, and module access
 - **The Hub** — live team channel with the original GridVault chat behavior preserved
-- **Design Lab** — staged creative systems workspace
+- **Design Lab** — visual concept boards, versioned dossiers, and review publishing
 - **Engineering Bay** — staged build operations workspace
 - **Project Vault** — durable project records, assignments, objectives, activity, and discussion
 - **Briefing Room** — staged objectives and decision workspace
@@ -27,6 +27,22 @@ Project Vault v1 provides a complete authenticated project workflow:
 - archive completed projects while retaining their searchable, read-only record
 
 All authenticated operators can view projects and participate in discussion. Only a project's creator can edit it or archive it, and only projects in the Complete state can be archived. Server-side validation enforces field lengths, allowed statuses, valid operators, unique codenames, and plain-text content. CSRF protection applies to every state-changing form.
+
+## Design Lab
+
+Design Lab v2 is GridVault's visual ideation and publishing workspace. Authenticated operators can:
+
+- browse a visual gallery with covers, project links, stages, revisions, search, and filters
+- build structured dossiers covering the problem, proposed solution, intended user, goals, constraints, materials, dimensions, components, risks, and references
+- develop ideas on an autosaving concept board with notes, headings, uploaded images, shapes, arrows, labels, swatches, and HTTPS reference cards
+- drag, resize, edit, delete, reorder, zoom, pan, and reset the board view
+- capture immutable numbered revision snapshots with change notes and inspect the complete history
+- assign callsign collaborators, attach review comments to revisions, and submit work for approval or rejection
+- publish the approved revision and archive completed dossiers as read-only records
+
+Creators manage collaborator assignments and archive approved designs. Creators and assigned collaborators can revise dossiers and boards, capture versions, and comment; only a collaborator can approve or reject a submitted revision. All authenticated operators can browse the gallery and read dossiers and historical revisions.
+
+Uploads are limited to structurally recognized PNG, JPEG, GIF, or WebP images of at most 5 MB. Uploaded assets are stored under the ignored instance directory. Text remains plain text, reference cards and linked URLs require HTTPS, JSON board payloads are bounded and validated, and every state-changing form or request is CSRF-protected.
 
 ## Local setup
 
@@ -59,6 +75,8 @@ GridVault is then available at `http://localhost:5000`.
 | `GRIDVAULT_ENV` | Set to `production` for strict secret validation and secure cookies | `development` |
 | `DATABASE_URL` | SQLAlchemy database connection | `sqlite:///gridvault.db` |
 | `SOCKETIO_CORS_ALLOWED_ORIGINS` | Optional comma-separated trusted browser origins | Same-origin only |
+| `DESIGN_UPLOAD_FOLDER` | Private Design Lab image storage | `instance/design_uploads/` |
+| `DESIGN_UPLOAD_MAX_BYTES` | Per-image upload limit | 5 MB |
 
 For production, set both `GRIDVAULT_ENV=production` and a strong `SECRET_KEY`. Never place real secrets in source control.
 
@@ -66,7 +84,7 @@ For production, set both `GRIDVAULT_ENV=production` and a strong `SECRET_KEY`. N
 
 The application factory explicitly keeps Flask's instance directory at `instance/`, and the `User` and `Message` models retain their original table and column names. Existing `instance/gridvault.db` files therefore continue to provide the same user accounts and stored messages after upgrading.
 
-GridVault uses an additive schema strategy: `ensure_schema()` calls SQLAlchemy's check-first table creation to create only missing Project Vault tables and indexes. It never drops, rewrites, or renames the existing `user` or `message` tables. The automated suite validates this strategy against a temporary legacy-format database before releases are merged.
+GridVault uses an additive schema strategy: `ensure_schema()` calls SQLAlchemy's check-first table creation to create only missing Project Vault and Design Lab tables and indexes. It never drops, rewrites, or renames the existing `user` or `message` tables. The automated suite validates this strategy against a temporary legacy-format database before releases are merged.
 
 The entire `instance/` directory plus common SQLite extensions are ignored. Do not commit a database file.
 
@@ -74,12 +92,12 @@ The entire `instance/` directory plus common SQLite extensions are ignored. Do n
 
 ```text
 gridvault/
-├── blueprints/       # Auth, console, Hub, and module routes
-├── static/           # Shared styles and Hub client behavior
+├── blueprints/       # Auth, console, Hub, Project Vault, and Design Lab routes
+├── static/           # Shared styles plus Hub and concept-board clients
 ├── templates/        # Shared shell and module views
 ├── config.py         # Environment-driven configuration
 ├── extensions.py     # Flask extension instances
-├── models.py         # Users, messages, projects, objectives, activity, and discussion
+├── models.py         # Hub, project, dossier, revision, review, and asset data
 ├── realtime.py       # Socket.IO presence and messaging events
 ├── schema.py         # Additive, check-first schema upgrades
 └── __init__.py       # Application factory
@@ -97,7 +115,7 @@ Run the automated suite with:
 python -m unittest discover -s tests -v
 ```
 
-The suite verifies authentication, password hashing, authenticated module access, persistent Hub messaging, presence events, legacy route compatibility, core security headers, project creation, permissions, editing, filtering, archiving, discussion, input validation, and legacy-data-preserving schema upgrades. The same suite runs in GitHub Actions for pushes and pull requests.
+The suite verifies authentication, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same suite runs in GitHub Actions for pushes and pull requests.
 
 ## Production serving
 

@@ -25,10 +25,19 @@ class Config:
     SOCKETIO_CORS_ALLOWED_ORIGINS = os.environ.get(
         "SOCKETIO_CORS_ALLOWED_ORIGINS",
     )
+    DESIGN_UPLOAD_FOLDER = os.environ.get("DESIGN_UPLOAD_FOLDER")
+    DESIGN_UPLOAD_MAX_BYTES = int(
+        os.environ.get("DESIGN_UPLOAD_MAX_BYTES", 5 * 1024 * 1024)
+    )
+    MAX_CONTENT_LENGTH = DESIGN_UPLOAD_MAX_BYTES + 1024 * 1024
 
     @classmethod
     def validate(cls) -> None:
         if cls.ENVIRONMENT == "production" and not cls.SECRET_KEY:
             raise RuntimeError(
                 "SECRET_KEY must be set when GRIDVAULT_ENV=production."
+            )
+        if not 1024 <= cls.DESIGN_UPLOAD_MAX_BYTES <= 10 * 1024 * 1024:
+            raise RuntimeError(
+                "DESIGN_UPLOAD_MAX_BYTES must be between 1 KB and 10 MB."
             )
