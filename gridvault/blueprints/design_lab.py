@@ -294,6 +294,33 @@ def _validate_board(payload):
             and -1000 <= z <= 1000
         ):
             return None, "A concept board element is outside the allowed bounds."
+        arrow_geometry = {}
+        if item["type"] == "arrow":
+            endpoint_keys = ("start_x", "start_y", "end_x", "end_y")
+            try:
+                if all(key in item for key in endpoint_keys):
+                    start_x, start_y, end_x, end_y = (
+                        float(item[key]) for key in endpoint_keys
+                    )
+                else:
+                    inset = min(20, width / 4)
+                    start_x, start_y = x + inset, y + height / 2
+                    end_x, end_y = x + width - inset, y + height / 2
+            except (TypeError, ValueError):
+                return None, "An arrow has invalid endpoint geometry."
+            if not (
+                0 <= start_x <= BOARD_WIDTH
+                and 0 <= end_x <= BOARD_WIDTH
+                and 0 <= start_y <= BOARD_HEIGHT
+                and 0 <= end_y <= BOARD_HEIGHT
+            ):
+                return None, "An arrow endpoint is outside the board bounds."
+            arrow_geometry = {
+                "start_x": start_x,
+                "start_y": start_y,
+                "end_x": end_x,
+                "end_y": end_y,
+            }
         content = str(item.get("content", "")).strip()[:1001]
         if len(content) > 1000 or _contains_html(content):
             return None, "Board text must be plain text with at most 1,000 characters."
@@ -328,6 +355,7 @@ def _validate_board(payload):
                 "content": content,
                 "color": color,
                 "url": url,
+                **arrow_geometry,
             }
         )
     return cleaned, None
