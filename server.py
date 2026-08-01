@@ -38,6 +38,16 @@ socketio = SocketIO(
 )
 
 
+# Tracks active connections.
+# A user can have multiple tabs open at once.
+connected_users = {}
+sid_to_user_id = {}
+
+# Temporary read receipts.
+# These reset when the server restarts.
+message_receipts = {}
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
@@ -96,6 +106,41 @@ def load_user(user_id):
         return None
 
 
+def get_online_callsigns():
+    users = []
+
+    for user_data in connected_users.values():
+        if user_data["sids"]:
+            users.append(user_data["callsign"])
+
+    return sorted(users, key=str.lower)
+
+
+def broadcast_online_users():
+    socketio.emit(
+        "online_users",
+        {
+            "users": get_online_callsigns(),
+        },
+    )
+
+
+def get_receipt_callsigns(message_id):
+    user_ids = message_receipts.get(message_id, set())
+
+    if not user_ids:
+        return []
+
+    users = db.session.execute(
+        db.select(User).where(User.id.in_(user_ids))
+    ).scalars().all()
+
+    return sorted(
+        [user.username for user in users],
+        key=str.lower,
+    )
+
+
 @app.route("/")
 def home():
     if current_user.is_authenticated:
@@ -110,17 +155,17 @@ def register():
         return redirect(url_for("chat"))
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
+        callsign = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
 
-        if len(username) < 3 or len(username) > 30:
-            flash("Username must contain between 3 and 30 characters.")
+        if len(callsign) < 3 or len(callsign) > 30:
+            flash("Callsign must contain between 3 and 30 characters.")
             return render_template("register.html")
 
-        if not username.replace("_", "").isalnum():
+        if not callsign.replace("_", "").isalnum():
             flash(
-                "Username may contain only letters, numbers, and underscores."
+                "Callsign may contain only letters, numbers, and underscores."
             )
             return render_template("register.html")
 
@@ -134,16 +179,16 @@ def register():
 
         existing_user = db.session.execute(
             db.select(User).where(
-                db.func.lower(User.username) == username.lower()
+                db.func.lower(User.username) == callsign.lower()
             )
         ).scalar_one_or_none()
 
         if existing_user:
-            flash("That username is already registered.")
+            flash("That callsign is already registered.")
             return render_template("register.html")
 
         user = User(
-            username=username,
+            username=callsign,
             password_hash=generate_password_hash(password),
         )
 
@@ -163,12 +208,12 @@ def login():
         return redirect(url_for("chat"))
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
+        callsign = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
         user = db.session.execute(
             db.select(User).where(
-                db.func.lower(User.username) == username.lower()
+                db.func.lower(User.username) == callsign.lower()
             )
         ).scalar_one_or_none()
 
@@ -176,7 +221,7 @@ def login():
             user.password_hash,
             password,
         ):
-            flash("Incorrect username or password.")
+            flash("Incorrect callsign or password.")
             return render_template("login.html")
 
         login_user(user)
@@ -215,13 +260,43 @@ def handle_connect():
     if not current_user.is_authenticated:
         return False
 
+    user_id = current_user.id
+    sid = request.sid
+
+    if user_id not in connected_users:
+        connected_users[user_id] = {
+            "callsign": current_user.username,
+            "sids": set(),
+        }
+
+    connected_users[user_id]["sids"].add(sid)
+    sid_to_user_id[sid] = user_id
+
     print(f"{current_user.username} connected.")
+
+    broadcast_online_users()
 
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    if current_user.is_authenticated:
-        print(f"{current_user.username} disconnected.")
+    sid = request.sid
+    user_id = sid_to_user_id.pop(sid, None)
+
+    if user_id is None:
+        return
+
+    user_data = connected_users.get(user_id)
+
+    if user_data is None:
+        return
+
+    user_data["sids"].discard(sid)
+
+    if not user_data["sids"]:
+        print(f"{user_data['callsign']} disconnected.")
+        connected_users.pop(user_id, None)
+
+    broadcast_online_users()
 
 
 @socketio.on("send_message")
@@ -257,9 +332,72 @@ def handle_message(data):
         "receive_message",
         {
             "id": new_message.id,
-            "username": current_user.username,
+            "callsign": current_user.username,
             "message": new_message.body,
             "created_at": new_message.created_at.isoformat(),
+        },
+        broadcast=True,
+    )
+
+
+@socketio.on("typing")
+def handle_typing():
+    if not current_user.is_authenticated:
+        return
+
+    emit(
+        "user_typing",
+        {
+            "callsign": current_user.username,
+        },
+        broadcast=True,
+        include_self=False,
+    )
+
+
+@socketio.on("stop_typing")
+def handle_stop_typing():
+    if not current_user.is_authenticated:
+        return
+
+    emit(
+        "user_stopped_typing",
+        {
+            "callsign": current_user.username,
+        },
+        broadcast=True,
+        include_self=False,
+    )
+
+
+@socketio.on("mark_read")
+def handle_mark_read(data):
+    if not current_user.is_authenticated:
+        return
+
+    if not isinstance(data, dict):
+        return
+
+    try:
+        message_id = int(data.get("message_id"))
+    except (TypeError, ValueError):
+        return
+
+    message = db.session.get(Message, message_id)
+
+    if message is None:
+        return
+
+    if message_id not in message_receipts:
+        message_receipts[message_id] = set()
+
+    message_receipts[message_id].add(current_user.id)
+
+    emit(
+        "read_receipt_update",
+        {
+            "message_id": message_id,
+            "callsigns": get_receipt_callsigns(message_id),
         },
         broadcast=True,
     )
