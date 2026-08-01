@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+
+{% block title %}Log in | GridVault{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block auth_content %}
+    <p class="eyebrow">Operator authentication</p>
+    <h2>Welcome back.</h2>
+    <p class="auth-subtitle">Enter your callsign to access the Mission Console.</p>
+
+    <form method="post" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="username">Callsign</label>
+        <input id="username" name="username" type="text" maxlength="30" autocomplete="username" placeholder="e.g. VEGA_7" required autofocus>
+
+        <label for="password">Passphrase</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your passphrase" required>
+
+        <button class="primary-button" type="submit">Enter Mission Console <span aria-hidden="true">→</span></button>
+    </form>
+
+    <p class="auth-switch">New to the Grid? <a href="{{ url_for('auth.register') }}">Register a callsign</a></p>
+{% endblock %}

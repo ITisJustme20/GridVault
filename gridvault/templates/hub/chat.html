@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}The Hub | GridVault{% endblock %}
+{% block topbar_title %}The Hub{% endblock %}
+{% block head %}<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" defer></script>{% endblock %}
+
+{% block content %}
+    <section id="hub-workspace" class="hub-workspace" data-callsign="{{ current_user.username }}">
+        <aside class="online-panel">
+            <div class="panel-title-row">
+                <div><p class="eyebrow">Presence</p><h2>Operators</h2></div>
+                <span id="online-count" class="count-badge">0</span>
+            </div>
+            <p class="panel-helper">Connected to this Hub channel now.</p>
+            <ul id="online-users" class="online-users"></ul>
+            <div class="channel-card">
+                <span class="status-beacon"></span>
+                <div><small>Active channel</small><strong># general-grid</strong></div>
+            </div>
+        </aside>
+
+        <section class="chat-container">
+            <header class="chat-header">
+                <div>
+                    <p class="eyebrow">Realtime command channel</p>
+                    <h1>The Hub</h1>
+                    <p>Shared operations feed · Last 100 transmissions</p>
+                </div>
+                <span class="secure-chip"><span aria-hidden="true">●</span> Live</span>
+            </header>
+
+            <section id="messages" class="messages" aria-live="polite" aria-label="Hub transmissions">
+                {% if not messages %}
+                    <div class="chat-empty" id="chat-empty">
+                        <span>HB</span>
+                        <h2>The channel is clear.</h2>
+                        <p>Transmit the first message to bring the Grid online.</p>
+                    </div>
+                {% endif %}
+                {% for saved_message in messages %}
+                    <article class="message {{ 'message-own' if saved_message.author.id == current_user.id else '' }}" data-message-id="{{ saved_message.id }}" data-callsign="{{ saved_message.author.username }}">
+                        <span class="message-avatar">{{ saved_message.author.username[:2] | upper }}</span>
+                        <div class="message-body">
+                            <div class="message-heading">
+                                <strong>{{ saved_message.author.username }}</strong>
+                                <time>{{ saved_message.created_at.strftime('%I:%M %p') }}</time>
+                            </div>
+                            <p>{{ saved_message.body }}</p>
+                            <small class="read-receipt"></small>
+                        </div>
+                    </article>
+                {% endfor %}
+            </section>
+
+            <div id="typing-indicator" class="typing-indicator" aria-live="polite"></div>
+            <button id="new-messages-button" class="new-messages-button" type="button" hidden>New transmissions ↓</button>
+
+            <form id="message-form" class="message-form">
+                <label class="sr-only" for="message-input">Transmit a message</label>
+                <input id="message-input" type="text" maxlength="500" placeholder="Transmit to #general-grid" autocomplete="off" required>
+                <span class="character-limit">500 max</span>
+                <button type="submit">Transmit <span aria-hidden="true">↗</span></button>
+            </form>
+        </section>
+    </section>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/chat.js') }}" defer></script>{% endblock %}

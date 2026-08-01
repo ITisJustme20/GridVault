@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#090c0f">
+    <title>{% block title %}GridVault{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    {% if current_user.is_authenticated %}
+        <div class="app-shell">
+            <aside class="sidebar" aria-label="GridVault navigation">
+                <a class="brand" href="{{ url_for('console.dashboard') }}" aria-label="GridVault Mission Console">
+                    <span class="brand-mark" aria-hidden="true">GV</span>
+                    <span>
+                        <strong>GridVault</strong>
+                        <small>Mission OS</small>
+                    </span>
+                </a>
+
+                <div class="sidebar-status">
+                    <span class="status-beacon" aria-hidden="true"></span>
+                    <span>
+                        <small>Network status</small>
+                        <strong>Grid online</strong>
+                    </span>
+                </div>
+
+                <nav class="primary-nav">
+                    <p class="nav-label">Command</p>
+                    <a href="{{ url_for('console.dashboard') }}" class="{{ 'active' if request.endpoint == 'console.dashboard' else '' }}">
+                        <span class="nav-code">MC</span>
+                        <span>Mission Console</span>
+                    </a>
+                    <a href="{{ url_for('hub.chat') }}" class="{{ 'active' if request.endpoint == 'hub.chat' else '' }}">
+                        <span class="nav-code">HB</span>
+                        <span>The Hub</span>
+                        <span class="live-dot" title="Live module"></span>
+                    </a>
+
+                    <p class="nav-label">Workspaces</p>
+                    {% set current_module = request.view_args.get('module_slug') if request.view_args else none %}
+                    {% for slug, label, code in [
+                        ('design-lab', 'Design Lab', 'DL'),
+                        ('engineering-bay', 'Engineering Bay', 'EB'),
+                        ('project-vault', 'Project Vault', 'PV'),
+                        ('briefing-room', 'Briefing Room', 'BR'),
+                        ('archive', 'Archive', 'AR')
+                    ] %}
+                        <a href="{{ url_for('modules.placeholder', module_slug=slug) }}" class="{{ 'active' if current_module == slug else '' }}">
+                            <span class="nav-code">{{ code }}</span>
+                            <span>{{ label }}</span>
+                        </a>
+                    {% endfor %}
+                    <a href="{{ url_for('modules.placeholder', module_slug='settings') }}" class="mobile-settings-nav {{ 'active' if current_module == 'settings' else '' }}">
+                        <span class="nav-code">ST</span>
+                        <span>Settings</span>
+                    </a>
+                </nav>
+
+                <div class="sidebar-footer">
+                    <a href="{{ url_for('modules.placeholder', module_slug='settings') }}" class="settings-link {{ 'active' if current_module == 'settings' else '' }}">
+                        <span class="operator-avatar">{{ current_user.username[:2] | upper }}</span>
+                        <span class="operator-copy">
+                            <strong>{{ current_user.username }}</strong>
+                            <small>Operator settings</small>
+                        </span>
+                        <span aria-hidden="true">›</span>
+                    </a>
+                    <form action="{{ url_for('auth.logout') }}" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="logout-button" type="submit">End secure session</button>
+                    </form>
+                </div>
+            </aside>
+
+            <div class="app-main">
+                <header class="topbar">
+                    <div>
+                        <p class="topbar-kicker">Authenticated workspace</p>
+                        <strong>{% block topbar_title %}Mission Console{% endblock %}</strong>
+                    </div>
+                    <div class="topbar-meta">
+                        <span class="secure-chip"><span aria-hidden="true">●</span> Secure link</span>
+                        <span class="topbar-callsign">{{ current_user.username }}</span>
+                    </div>
+                </header>
+
+                <main class="page-content">
+                    {% include 'partials/flashes.html' %}
+                    {% block content %}{% endblock %}
+                </main>
+            </div>
+        </div>
+    {% else %}
+        <div class="auth-shell">
+            <section class="auth-brand-panel" aria-label="GridVault introduction">
+                <a class="brand auth-brand" href="{{ url_for('auth.login') }}">
+                    <span class="brand-mark" aria-hidden="true">GV</span>
+                    <span><strong>GridVault</strong><small>Mission OS</small></span>
+                </a>
+                <div class="auth-pitch">
+                    <p class="eyebrow">Secure coordination layer</p>
+                    <h1>One grid.<br>Every mission.</h1>
+                    <p>Coordinate operators, preserve mission context, and move decisive work forward from a single command surface.</p>
+                </div>
+                <div class="auth-signal"><span class="status-beacon"></span> Encrypted session perimeter ready</div>
+            </section>
+            <main class="auth-main">
+                <div class="auth-card">
+                    {% include 'partials/flashes.html' %}
+                    {% block auth_content %}{% endblock %}
+                </div>
+            </main>
+        </div>
+    {% endif %}
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

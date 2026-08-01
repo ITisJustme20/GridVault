@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ module.title }} | GridVault{% endblock %}
+{% block topbar_title %}{{ module.title }}{% endblock %}
+
+{% block content %}
+    <section class="module-hero">
+        <div>
+            <p class="eyebrow">{{ module.eyebrow }} / {{ module.code }}</p>
+            <span class="stage-badge">Foundation staged</span>
+            <h1>{{ module.title }}</h1>
+            <p>{{ module.description }}</p>
+        </div>
+        <div class="blueprint-mark" aria-hidden="true"><span>{{ module.code[:2] }}</span></div>
+    </section>
+
+    <div class="placeholder-grid">
+        <section class="panel capability-panel">
+            <div class="section-heading">
+                <div><p class="eyebrow">Planned surface</p><h2>Module capabilities</h2></div>
+                <span class="section-note">Next phase</span>
+            </div>
+            <div class="capability-list">
+                {% for capability in module.capabilities %}
+                    <article>
+                        <span>0{{ loop.index }}</span>
+                        <div><h3>{{ capability }}</h3><p>Architecture reserved and ready for mission-specific requirements.</p></div>
+                        <small>Planned</small>
+                    </article>
+                {% endfor %}
+            </div>
+        </section>
+
+        <aside class="panel readiness-panel">
+            <p class="eyebrow">Readiness report</p>
+            <div class="readiness-ring"><strong>01</strong><span>Foundation</span></div>
+            <h2>Surface secured.</h2>
+            <p>Navigation, access control, responsive layout, and module routing are operational.</p>
+            <dl>
+                <div><dt>Access</dt><dd>Authenticated</dd></div>
+                <div><dt>Route</dt><dd>/{{ module_slug }}</dd></div>
+                <div><dt>Status</dt><dd class="status-ready">Ready</dd></div>
+            </dl>
+        </aside>
+    </div>
+
+    <section class="next-step-banner">
+        <div><span class="status-beacon"></span><p><strong>{{ module.title }} is connected to the Grid.</strong><br>Product workflows can be added without changing the shared console foundation.</p></div>
+        <a class="secondary-button" href="{{ url_for('console.dashboard') }}">Return to Mission Console</a>
+    </section>
+{% endblock %}
