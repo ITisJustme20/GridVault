@@ -191,10 +191,53 @@
 
     function duplicateElement(item, id, z, offset = 24) {
         const duplicate = {...item, id, z};
+        if (item.data) duplicate.data = JSON.parse(JSON.stringify(item.data));
         if (item.type === "arrow") {
             return {...duplicate, ...moveArrow(item, offset, offset, 1)};
         }
         return {...duplicate, ...moveGeometry(item, offset, offset, 1)};
+    }
+
+    function connectorGeometry(source, target) {
+        const sourceBounds = elementBounds(source);
+        const targetBounds = elementBounds(target);
+        const sourceCenter = {
+            x: sourceBounds.centerX,
+            y: sourceBounds.centerY
+        };
+        const targetCenter = {
+            x: targetBounds.centerX,
+            y: targetBounds.centerY
+        };
+        const deltaX = targetCenter.x - sourceCenter.x;
+        const deltaY = targetCenter.y - sourceCenter.y;
+        const horizontal = Math.abs(deltaX) >= Math.abs(deltaY);
+        const start = horizontal ? {
+            x: deltaX >= 0 ? sourceBounds.right : sourceBounds.x,
+            y: sourceBounds.centerY
+        } : {
+            x: sourceBounds.centerX,
+            y: deltaY >= 0 ? sourceBounds.bottom : sourceBounds.y
+        };
+        const end = horizontal ? {
+            x: deltaX >= 0 ? targetBounds.x : targetBounds.right,
+            y: targetBounds.centerY
+        } : {
+            x: targetBounds.centerX,
+            y: deltaY >= 0 ? targetBounds.y : targetBounds.bottom
+        };
+        return {
+            start_x: Math.round(start.x),
+            start_y: Math.round(start.y),
+            end_x: Math.round(end.x),
+            end_y: Math.round(end.y),
+            ...arrowBounds({
+                start_x: start.x,
+                start_y: start.y,
+                end_x: end.x,
+                end_y: end.y
+            })
+        };
     }
 
     function elementBounds(item) {
@@ -509,6 +552,7 @@
         snapArrowPoint,
         moveArrowEndpoint,
         duplicateElement,
+        connectorGeometry,
         elementBounds,
         alignmentAnchors,
         snapElementMove,

@@ -63,7 +63,7 @@ test("rendered board advertises persistence and read-only controls", () => {
     assert.match(boardTemplate, /data-editable=/);
     assert.match(boardTemplate, /role="status"/);
     assert.match(boardTemplate, /Archived designs cannot be modified/);
-    assert.match(boardTemplate, /design_board\.js', v='2\.6'/);
+    assert.match(boardTemplate, /design_board\.js', v='3\.0'/);
 });
 
 test("Hub allows Socket.IO transport fallback for forwarded proxies", () => {
@@ -118,4 +118,28 @@ test("movement renders transient alignment and equal-spacing guides", () => {
     assert.match(board, /function endGesture[\s\S]*clearGuides\(\)/);
     assert.match(boardCss, /\.board-guide\.spacing\.horizontal/);
     assert.match(boardCss, /\.board-guide\.spacing\.vertical/);
+});
+
+test("Toolkit is text based, grouped, and keeps one accordion group open", () => {
+    for (const label of [
+        "Add Object", "Text Note", "Rectangle", "Arrow", "Connector", "Intel",
+        "Toolkit", "General", "Engineering", "Software", "Markets", "Board Tools"
+    ]) assert.match(boardTemplate, new RegExp(`>${label}<|>${label}\\s*<`));
+    for (const type of ["heading", "zone", "code", "market", "minimap"]) {
+        assert.match(boardTemplate, new RegExp(`data-add=\"${type}\"`));
+    }
+    assert.match(board, /document\.querySelectorAll\("\.toolkit-group-toggle"\)[\s\S]*nextElementSibling\.hidden = true/);
+    assert.doesNotMatch(boardTemplate, /emoji|data-icon|tool-icon/i);
+});
+
+test("new objects share creation, clipboard, connector, and Mini Map behavior", () => {
+    assert.match(board, /function add\(type, options = \{\}\)/);
+    assert.match(board, /const item = \{id: uid\(\), type/);
+    assert.match(board, /data: \{\.\.\.initialData/);
+    assert.match(board, /core\.duplicateElement/);
+    assert.match(board, /source_id: source\.id, target_id: item\.id/);
+    assert.match(board, /core\.connectorGeometry\(source, target\)/);
+    assert.match(board, /function miniMapVisual\(item\)/);
+    assert.match(board, /beginMiniMapGesture/);
+    assert.match(board, /function add\(type, options = \{\}\) \{\s*if \(!editable\) return null/);
 });

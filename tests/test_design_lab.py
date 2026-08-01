@@ -241,6 +241,59 @@ class DesignLabTestCase(unittest.TestCase):
             self.assertEqual(design.board_version, 1)
             self.assertEqual(json.loads(design.board_state), first_state)
 
+    def test_toolkit_objects_and_connector_serialize_safely(self):
+        self.register("TOOLKIT_7")
+        self.create_design(codename="TKV_ONE")
+        design_id = self.design_id()
+        representative = [
+            {
+                "id": "heading_one", "type": "heading", "x": 100, "y": 100,
+                "width": 320, "height": 90, "z": 1, "content": "", "color": "#67d8c4", "url": "",
+                "data": {"text": "System map", "size": "32", "alignment": "left", "accent": "#67d8c4"},
+            },
+            {
+                "id": "zone_one", "type": "zone", "x": 80, "y": 70,
+                "width": 700, "height": 420, "z": 0, "content": "", "color": "#67d8c4", "url": "",
+                "data": {"name": "Authentication", "opacity": "18"},
+            },
+            {
+                "id": "code_one", "type": "code", "x": 470, "y": 120,
+                "width": 360, "height": 260, "z": 2, "content": "", "color": "#67d8c4", "url": "",
+                "data": {"language": "Python", "filename": "auth.py", "code": "def verify():\n    return True", "line_numbers": True, "wrap": False},
+            },
+            {
+                "id": "market_one", "type": "market", "x": 900, "y": 120,
+                "width": 350, "height": 300, "z": 3, "content": "", "color": "#67d8c4", "url": "",
+                "data": {"symbol": "GRID", "name": "Grid Systems", "asset_type": "Stock", "price": "42.50", "change": "1.4", "status": "Researching", "thesis": "Manual research", "risks": "Execution", "history": "38,40,42.5"},
+            },
+            {
+                "id": "map_one", "type": "minimap", "x": 1300, "y": 120,
+                "width": 300, "height": 220, "z": 4, "content": "", "color": "#67d8c4", "url": "", "data": {},
+            },
+            {
+                "id": "connector_one", "type": "connector", "x": 380, "y": 120,
+                "width": 120, "height": 80, "z": 5, "content": "", "color": "#67d8c4", "url": "",
+                "source_id": "heading_one", "target_id": "code_one", "data": {"label": "documents"},
+            },
+        ]
+        response = self.client.post(
+            f"/design-lab/{design_id}/board",
+            json={"elements": representative, "base_version": 0},
+        )
+        self.assertEqual(response.status_code, 200)
+        with self.app.app_context():
+            saved = json.loads(db.session.get(Design, design_id).board_state)
+            self.assertEqual({item["type"] for item in saved}, {"heading", "zone", "code", "market", "minimap", "connector"})
+            connector = next(item for item in saved if item["type"] == "connector")
+            self.assertEqual((connector["source_id"], connector["target_id"]), ("heading_one", "code_one"))
+
+        unsafe = [{**representative[0], "data": {**representative[0]["data"], "text": "<script>alert(1)</script>"}}]
+        rejected = self.client.post(
+            f"/design-lab/{design_id}/board",
+            json={"elements": unsafe, "base_version": 1},
+        )
+        self.assertEqual(rejected.status_code, 400)
+
     def test_board_geometry_must_stay_inside_canvas(self):
         self.register("VEGA_7")
         self.create_design()

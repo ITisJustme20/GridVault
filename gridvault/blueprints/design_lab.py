@@ -54,6 +54,38 @@ BOARD_TYPES = {
     "label",
     "swatch",
     "reference",
+    "intel",
+    "signal",
+    "zone",
+    "calculator",
+    "chart",
+    "graph",
+    "code",
+    "architecture",
+    "database",
+    "api",
+    "logic",
+    "market",
+    "minimap",
+    "connector",
+}
+BOARD_DATA_FIELDS = {
+    "intel": {"title": 160, "body": 3000, "classification": 120, "accent": 20},
+    "heading": {"text": 500, "size": 10, "alignment": 20, "accent": 20},
+    "signal": {"title": 160, "body": 3000, "signal_type": 30, "accent": 20},
+    "reference": {"title": 300, "notes": 3000, "url": 500, "tag": 120},
+    "swatch": {"name": 160, "note": 1000},
+    "zone": {"name": 160, "opacity": 10},
+    "calculator": {"mode": 40, "input_a": 80, "input_b": 80, "operator": 10, "result": 120, "notes": 1000},
+    "chart": {"title": 160, "chart_type": 20, "labels": 2000, "values": 2000, "x_label": 120, "y_label": 120, "legend": bool},
+    "graph": {"title": 160, "x_label": 120, "y_label": 120, "points": 3000, "connected": bool, "grid": bool},
+    "code": {"code": 12000, "language": 40, "filename": 240, "line_numbers": bool, "wrap": bool},
+    "architecture": {"name": 160, "component_type": 80, "description": 2000, "technology": 160, "status": 80},
+    "database": {"name": 160, "database_type": 80, "fields": 5000, "notes": 2000},
+    "api": {"method": 10, "route": 500, "description": 2000, "authentication": 160, "request": 3000, "response": 3000, "status_code": 20},
+    "logic": {"logic_type": 30, "title": 160, "description": 2000, "true_label": 120, "false_label": 120},
+    "market": {"symbol": 30, "name": 160, "asset_type": 40, "price": 80, "change": 80, "status": 40, "thesis": 3000, "risks": 3000, "history": 2000},
+    "connector": {"label": 160},
 }
 BOARD_WIDTH = 4000
 BOARD_HEIGHT = 3000
@@ -272,12 +304,16 @@ def _validate_board(payload):
     if len(elements) > 250:
         return None, "A concept board may contain at most 250 elements."
     cleaned = []
+    seen_ids = set()
     for item in elements:
         if not isinstance(item, dict) or item.get("type") not in BOARD_TYPES:
             return None, "The concept board contains an unsupported element."
         element_id = str(item.get("id", ""))
         if not ELEMENT_ID_PATTERN.fullmatch(element_id):
             return None, "A concept board element has an invalid identifier."
+        if element_id in seen_ids:
+            return None, "Concept board element identifiers must be unique."
+        seen_ids.add(element_id)
         try:
             x, y = float(item.get("x", 0)), float(item.get("y", 0))
             width, height = float(item.get("width", 160)), float(item.get("height", 100))
@@ -327,7 +363,38 @@ def _validate_board(payload):
         color = str(item.get("color", "#67d8c4"))
         if not HEX_COLOR_PATTERN.fullmatch(color):
             return None, "Board colors must use six-digit hex values."
+        raw_data = item.get("data", {})
+        if not isinstance(raw_data, dict):
+            return None, "A concept board object has invalid structured data."
+        allowed_fields = BOARD_DATA_FIELDS.get(item["type"], {})
+        data = {}
+        for key, value in raw_data.items():
+            if key not in allowed_fields:
+                continue
+            limit = allowed_fields[key]
+            if limit is bool:
+                if not isinstance(value, bool):
+                    return None, "A concept board option must be true or false."
+                data[key] = value
+                continue
+            text_value = str(value).strip()
+            if len(text_value) > limit:
+                return None, "A concept board field exceeds its allowed length."
+            if key != "code" and _contains_html(text_value):
+                return None, "Board object fields must use plain text."
+            data[key] = text_value
+        if "accent" in data and not HEX_COLOR_PATTERN.fullmatch(data["accent"]):
+            return None, "Board accent colors must use six-digit hex values."
+        if item["type"] == "zone" and "opacity" in data:
+            try:
+                opacity = float(data["opacity"])
+            except ValueError:
+                return None, "Zone transparency must be numeric."
+            if not 5 <= opacity <= 70:
+                return None, "Zone transparency must be between 5 and 70 percent."
         url = str(item.get("url", "")).strip()
+        if item["type"] == "reference" and data.get("url"):
+            url = data["url"]
         if url:
             parsed = urlparse(url)
             if item["type"] == "image":
@@ -343,8 +410,7 @@ def _validate_board(payload):
                     return None, "Board images must use an uploaded Design Lab asset."
             elif parsed.scheme != "https" or not parsed.netloc or len(url) > 500:
                 return None, "Reference card URLs must use a valid HTTPS address."
-        cleaned.append(
-            {
+        cleaned_item = {
                 "id": element_id,
                 "type": item["type"],
                 "x": x,
@@ -357,7 +423,26 @@ def _validate_board(payload):
                 "url": url,
                 **arrow_geometry,
             }
-        )
+        if "data" in item or data:
+            cleaned_item["data"] = data
+        if item["type"] == "connector":
+            source_id = str(item.get("source_id", ""))
+            target_id = str(item.get("target_id", ""))
+            if not (
+                ELEMENT_ID_PATTERN.fullmatch(source_id)
+                and ELEMENT_ID_PATTERN.fullmatch(target_id)
+                and source_id != target_id
+            ):
+                return None, "A connector has invalid object references."
+            cleaned_item.update(source_id=source_id, target_id=target_id)
+        cleaned.append(cleaned_item)
+    element_ids = {item["id"] for item in cleaned}
+    for item in cleaned:
+        if item["type"] == "connector" and (
+            item["source_id"] not in element_ids
+            or item["target_id"] not in element_ids
+        ):
+            return None, "A connector must reference objects on this board."
     return cleaned, None
 
 
