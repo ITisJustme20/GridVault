@@ -167,6 +167,18 @@ def handle_message(data):
     )
 
 
+def broadcast_message(message: Message, client_id: str = "") -> dict[str, object]:
+    """Publish a committed HTTP-created message to its authorized room."""
+    payload = serialize_message(message)
+    payload["client_id"] = client_id
+    socketio.emit(
+        "receive_message",
+        payload,
+        to=conversation_room(message.conversation_id),
+    )
+    return payload
+
+
 def _typing_event(data, event_name: str):
     if not current_user.is_authenticated:
         return

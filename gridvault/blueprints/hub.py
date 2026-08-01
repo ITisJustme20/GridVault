@@ -3,9 +3,22 @@
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import datetime, timezone
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
 from flask_login import current_user, login_required
 
 from ..chat_service import (
@@ -20,11 +33,23 @@ from ..chat_service import (
     user_room,
 )
 from ..extensions import db, socketio
-from ..models import Conversation, ConversationMember, Message, User
+from ..file_vault import (
+    FileValidationError,
+    allowed_extensions,
+    attachment_can_preview,
+    attachment_path,
+    discard_private_file,
+    human_file_size,
+    serialize_attachment,
+    store_private_file,
+    validate_upload,
+)
+from ..models import ChatAttachment, Conversation, ConversationMember, Message, User
 
 
 hub_bp = Blueprint("hub", __name__)
 HTML_PATTERN = re.compile(r"<\s*/?\s*[a-zA-Z][^>]*>")
+CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
 def _callsigns(raw_value: str) -> list[str]:
@@ -113,6 +138,12 @@ def chat():
         for message in saved_messages
         if message.user_id == current_user.id
     }
+    active_attachments = db.session.execute(
+        db.select(ChatAttachment)
+        .where(ChatAttachment.conversation_id == active.id)
+        .order_by(ChatAttachment.uploaded_at.desc())
+        .limit(100)
+    ).scalars().all() if active.type in {"direct", "group"} else []
     operators = db.session.execute(
         db.select(User)
         .where(User.id != current_user.id)
@@ -141,7 +172,172 @@ def chat():
         messages=saved_messages,
         receipt_map=receipt_map,
         operators=operators,
+        active_attachments=active_attachments,
+        attachment_can_preview=attachment_can_preview,
+        human_file_size=human_file_size,
+        attachment_accept=",".join(f".{extension}" for extension in allowed_extensions()),
+        attachment_max_size=human_file_size(current_app.config["CHAT_UPLOAD_MAX_BYTES"]),
     )
+
+
+def _authorized_attachment(attachment_id: str) -> ChatAttachment:
+    if not re.fullmatch(r"[0-9a-f]{32}", attachment_id):
+        abort(404)
+    attachment = db.session.get(ChatAttachment, attachment_id)
+    if attachment is None:
+        abort(404)
+    conversation, membership = authorized_conversation(
+        attachment.conversation_id,
+        current_user,
+    )
+    if conversation is None or membership is None or conversation.type == "grid":
+        abort(403)
+    return attachment
+
+
+def _secure_file_response(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Content-Security-Policy"] = "sandbox; default-src 'none'"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    return response
+
+
+@hub_bp.post("/chat/conversations/<int:conversation_id>/attachments")
+@login_required
+def upload_attachment(conversation_id: int):
+    conversation, membership = authorized_conversation(conversation_id, current_user)
+    if conversation is None or membership is None:
+        return jsonify({"ok": False, "error": "Conversation access denied."}), 403
+    if conversation.type not in {"direct", "group"}:
+        return jsonify({"ok": False, "error": "Files cannot be shared in GRID."}), 400
+    uploaded = request.files.get("file")
+    if uploaded is None:
+        return jsonify({"ok": False, "error": "Choose a file to attach."}), 400
+    message_text = request.form.get("message", "").strip()
+    if len(message_text) > 500 or "\x00" in message_text:
+        return jsonify({
+            "ok": False,
+            "error": "Messages must be plain text with at most 500 characters.",
+        }), 400
+    client_id = request.form.get("client_id", "").strip()
+    if client_id and not CLIENT_ID_PATTERN.fullmatch(client_id):
+        return jsonify({"ok": False, "error": "The pending message identifier is invalid."}), 400
+    try:
+        data, original_filename, extension, rule = validate_upload(
+            uploaded,
+            current_app.config["CHAT_UPLOAD_MAX_BYTES"],
+        )
+    except FileValidationError as error:
+        return jsonify({"ok": False, "error": str(error)}), 400
+
+    try:
+        storage_key = store_private_file(data, extension)
+    except (OSError, RuntimeError):
+        current_app.logger.error("Private chat attachment storage is unavailable.")
+        return jsonify({"ok": False, "error": "The upload could not be completed."}), 500
+    try:
+        message = Message(
+            body=message_text,
+            author=current_user,
+            conversation=conversation,
+        )
+        db.session.add(message)
+        db.session.flush()
+        attachment = ChatAttachment(
+            id=uuid.uuid4().hex,
+            conversation=conversation,
+            message=message,
+            uploader=current_user,
+            original_filename=original_filename,
+            storage_key=storage_key,
+            byte_size=len(data),
+            detected_mime_type=rule.mime_type,
+            category=rule.category,
+        )
+        conversation.updated_at = datetime.now(timezone.utc)
+        db.session.add(attachment)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        discard_private_file(storage_key)
+        current_app.logger.error("Chat attachment transaction failed.")
+        return jsonify({"ok": False, "error": "The upload could not be completed."}), 500
+
+    from ..realtime import broadcast_message
+
+    payload = broadcast_message(message, client_id)
+    return jsonify({"ok": True, "message": payload}), 201
+
+
+@hub_bp.get("/chat/conversations/<int:conversation_id>/files")
+@login_required
+def conversation_files(conversation_id: int):
+    conversation, membership = authorized_conversation(conversation_id, current_user)
+    if conversation is None or membership is None or conversation.type == "grid":
+        abort(403)
+    attachments = db.session.execute(
+        db.select(ChatAttachment)
+        .where(ChatAttachment.conversation_id == conversation.id)
+        .order_by(ChatAttachment.uploaded_at.desc())
+        .limit(100)
+    ).scalars().all()
+    return jsonify({"files": [serialize_attachment(item) for item in attachments]})
+
+
+@hub_bp.get("/chat/attachments/<attachment_id>/metadata")
+@login_required
+def attachment_metadata(attachment_id: str):
+    return jsonify({"attachment": serialize_attachment(_authorized_attachment(attachment_id))})
+
+
+@hub_bp.get("/chat/attachments/<attachment_id>/preview")
+@login_required
+def preview_attachment(attachment_id: str):
+    attachment = _authorized_attachment(attachment_id)
+    if not attachment_can_preview(attachment):
+        abort(404)
+    try:
+        path = attachment_path(attachment)
+    except FileNotFoundError:
+        abort(404)
+    if attachment.category == "image":
+        response = send_file(
+            path,
+            mimetype=attachment.detected_mime_type,
+            as_attachment=False,
+            download_name=attachment.original_filename,
+            conditional=True,
+            max_age=0,
+        )
+    else:
+        text_content = path.read_bytes().decode("utf-8-sig")
+        response = Response(text_content, content_type="text/plain; charset=utf-8")
+        response.headers.set(
+            "Content-Disposition",
+            "inline",
+            filename=attachment.original_filename,
+        )
+    return _secure_file_response(response)
+
+
+@hub_bp.get("/chat/attachments/<attachment_id>/download")
+@login_required
+def download_attachment(attachment_id: str):
+    attachment = _authorized_attachment(attachment_id)
+    try:
+        path = attachment_path(attachment)
+    except FileNotFoundError:
+        abort(404)
+    response = send_file(
+        path,
+        mimetype="application/octet-stream",
+        as_attachment=True,
+        download_name=attachment.original_filename,
+        conditional=True,
+        max_age=0,
+    )
+    return _secure_file_response(response)
 
 
 @hub_bp.post("/chat/conversations")
