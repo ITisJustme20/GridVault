@@ -335,6 +335,11 @@ class ProjectVaultTestCase(unittest.TestCase):
                         table_names
                     )
                 )
+                design_columns = {
+                    column["name"]
+                    for column in inspect(db.engine).get_columns("design")
+                }
+                self.assertIn("board_version", design_columns)
                 db.session.remove()
                 db.engine.dispose()
 
