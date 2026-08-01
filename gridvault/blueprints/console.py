@@ -4,7 +4,15 @@ from flask import Blueprint, render_template
 from flask_login import login_required
 
 from ..extensions import db
-from ..models import Design, DesignActivity, Message, Project, ProjectActivity, User
+from ..models import (
+    Conversation,
+    Design,
+    DesignActivity,
+    Message,
+    Project,
+    ProjectActivity,
+    User,
+)
 
 
 console_bp = Blueprint("console", __name__)
@@ -29,7 +37,11 @@ def dashboard():
         db.select(db.func.count(Design.id)).where(Design.stage == "Approved")
     ) or 0
     recent_messages = db.session.execute(
-        db.select(Message).order_by(Message.created_at.desc()).limit(3)
+        db.select(Message)
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .where(Conversation.type == "grid")
+        .order_by(Message.created_at.desc())
+        .limit(3)
     ).scalars().all()
     recent_project_activity = db.session.execute(
         db.select(ProjectActivity)
