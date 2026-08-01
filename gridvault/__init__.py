@@ -43,8 +43,14 @@ def create_app(test_config: dict | None = None) -> Flask:
     instance_path.mkdir(parents=True, exist_ok=True)
     if not app.config.get("DESIGN_UPLOAD_FOLDER"):
         app.config["DESIGN_UPLOAD_FOLDER"] = str(instance_path / "design_uploads")
+    if not app.config.get("CHAT_UPLOAD_FOLDER"):
+        app.config["CHAT_UPLOAD_FOLDER"] = str(instance_path / "chat_uploads")
     app.config.setdefault("DESIGN_UPLOAD_MAX_BYTES", 5 * 1024 * 1024)
-    app.config.setdefault("MAX_CONTENT_LENGTH", 6 * 1024 * 1024)
+    app.config.setdefault("CHAT_UPLOAD_MAX_BYTES", 25 * 1024 * 1024)
+    app.config["MAX_CONTENT_LENGTH"] = max(
+        app.config["DESIGN_UPLOAD_MAX_BYTES"],
+        app.config["CHAT_UPLOAD_MAX_BYTES"],
+    ) + 1024 * 1024
 
     db.init_app(app)
     login_manager.init_app(app)

@@ -102,6 +102,12 @@ class Conversation(db.Model):
         foreign_keys="Message.conversation_id",
         order_by="Message.created_at",
     )
+    attachments = db.relationship(
+        "ChatAttachment",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ChatAttachment.uploaded_at",
+    )
 
 
 class ConversationMember(db.Model):
@@ -164,6 +170,60 @@ class Message(db.Model):
         "Conversation",
         back_populates="messages",
         foreign_keys=[conversation_id],
+    )
+    attachment = db.relationship(
+        "ChatAttachment",
+        back_populates="message",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class ChatAttachment(db.Model):
+    __table_args__ = (
+        db.Index(
+            "idx_chat_attachment_conversation_uploaded",
+            "conversation_id",
+            "uploaded_at",
+        ),
+    )
+
+    id = db.Column(db.String(32), primary_key=True)
+    conversation_id = db.Column(
+        db.Integer,
+        db.ForeignKey("conversation.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    message_id = db.Column(
+        db.Integer,
+        db.ForeignKey("message.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    uploader_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False,
+        index=True,
+    )
+    original_filename = db.Column(db.String(255), nullable=False)
+    storage_key = db.Column(db.String(80), nullable=False, unique=True)
+    byte_size = db.Column(db.Integer, nullable=False)
+    detected_mime_type = db.Column(db.String(100), nullable=False)
+    category = db.Column(db.String(20), nullable=False)
+    uploaded_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    conversation = db.relationship("Conversation", back_populates="attachments")
+    message = db.relationship("Message", back_populates="attachment")
+    uploader = db.relationship(
+        "User",
+        backref=db.backref("chat_attachments", lazy=True),
     )
 
 

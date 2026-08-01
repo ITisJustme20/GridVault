@@ -133,7 +133,7 @@ def receipt_callsigns(message: Message) -> list[str]:
 
 
 def serialize_message(message: Message) -> dict[str, object]:
-    return {
+    payload = {
         "id": message.id,
         "conversation_id": message.conversation_id,
         "callsign": message.author.username,
@@ -141,3 +141,10 @@ def serialize_message(message: Message) -> dict[str, object]:
         "created_at": message.created_at.isoformat(),
         "read_by": receipt_callsigns(message),
     }
+    if message.attachment is not None:
+        from .file_vault import serialize_attachment
+
+        payload["attachment"] = serialize_attachment(message.attachment)
+    else:
+        payload["attachment"] = None
+    return payload

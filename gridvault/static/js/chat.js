@@ -4,23 +4,38 @@
     const workspace = document.getElementById("hub-workspace");
     if (!workspace) return;
 
-    // Polling may upgrade to WebSocket, which keeps HTTPS/WSS proxy deployments
-    // compatible without forcing a transport that a forwarded URL may block.
+    // Polling may upgrade to WebSocket, preserving HTTPS/WSS proxy compatibility.
     const socket = io();
     const currentCallsign = workspace.dataset.callsign;
     const activeConversationId = Number(workspace.dataset.conversationId);
     const activeConversationType = workspace.dataset.conversationType;
+    const attachmentEnabled = workspace.dataset.attachmentEnabled === "true";
+    const maximumUploadBytes = Number(workspace.dataset.maxUploadBytes || 0);
     const messageForm = document.getElementById("message-form");
     const messageInput = document.getElementById("message-input");
     const messages = document.getElementById("messages");
+    const chatContainer = document.getElementById("chat-container");
     const typingIndicator = document.getElementById("typing-indicator");
     const errorState = document.getElementById("chat-error");
     const newMessagesButton = document.getElementById("new-messages-button");
     const directPresence = document.getElementById("direct-presence");
     const liveStatus = document.querySelector(".live-status");
+    const attachmentInput = document.getElementById("attachment-input");
+    const pendingAttachment = document.getElementById("pending-attachment");
+    const pendingAttachmentName = document.getElementById("pending-attachment-name");
+    const pendingAttachmentDetail = document.getElementById("pending-attachment-detail");
+    const pendingAttachmentState = document.getElementById("pending-attachment-state");
+    const removeAttachment = document.getElementById("remove-attachment");
+    const filesToggle = document.getElementById("files-toggle");
+    const filesClose = document.getElementById("files-close");
+    const filesPanel = document.getElementById("conversation-files");
+    const filesList = document.getElementById("conversation-files-list");
     const typingUsers = new Set();
     let typingTimer = null;
     let typingActive = false;
+    let selectedFile = null;
+    let uploading = false;
+    let dragDepth = 0;
 
     function isNearBottom() {
         return messages.scrollHeight - messages.scrollTop - messages.clientHeight < 120;
@@ -40,6 +55,20 @@
             hour: "numeric",
             minute: "2-digit"
         });
+    }
+
+    function formatDate(dateValue) {
+        return new Date(dateValue).toLocaleDateString([], {
+            month: "short",
+            day: "numeric",
+            year: "numeric"
+        });
+    }
+
+    function formatFileSize(byteSize) {
+        if (byteSize < 1024) return `${byteSize} B`;
+        if (byteSize < 1024 * 1024) return `${(byteSize / 1024).toFixed(1)} KB`;
+        return `${(byteSize / (1024 * 1024)).toFixed(1)} MB`;
     }
 
     function latestMessage() {
@@ -109,6 +138,48 @@
         return `pending_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     }
 
+    function actionLink(label, url, preview = false) {
+        const link = document.createElement("a");
+        link.textContent = label;
+        link.href = url;
+        if (preview) {
+            link.target = "_blank";
+            link.rel = "noopener";
+        }
+        return link;
+    }
+
+    function attachmentElement(attachment) {
+        const section = document.createElement("section");
+        section.className = "message-attachment";
+        section.dataset.attachmentId = attachment.id;
+        const meta = document.createElement("div");
+        meta.className = "message-attachment-meta";
+        const filename = document.createElement("strong");
+        filename.textContent = attachment.filename;
+        const detail = document.createElement("span");
+        detail.textContent = `${attachment.size} · ${attachment.category}`;
+        meta.append(filename, detail);
+        const actions = document.createElement("div");
+        actions.className = "message-attachment-actions";
+        if (attachment.preview_url) {
+            actions.append(actionLink("Preview", attachment.preview_url, true));
+        }
+        actions.append(actionLink("Download", attachment.download_url));
+        section.append(meta, actions);
+        if (attachment.category === "Image" && attachment.preview_url) {
+            const preview = actionLink("", attachment.preview_url, true);
+            preview.className = "attachment-thumbnail";
+            const image = document.createElement("img");
+            image.src = attachment.preview_url;
+            image.alt = `Preview of ${attachment.filename}`;
+            image.loading = "lazy";
+            preview.append(image);
+            section.append(preview);
+        }
+        return section;
+    }
+
     function messageElement(data, statusText = "") {
         const own = data.callsign === currentCallsign;
         const article = document.createElement("article");
@@ -128,13 +199,18 @@
         callsign.textContent = data.callsign;
         const time = document.createElement("time");
         time.textContent = formatTime(data.created_at);
-        const text = document.createElement("p");
-        text.textContent = data.message;
         const receipt = document.createElement("small");
         receipt.className = "read-receipt";
         receipt.textContent = own ? statusText : "";
         heading.append(callsign, time);
-        body.append(heading, text, receipt);
+        body.append(heading);
+        if (data.message) {
+            const text = document.createElement("p");
+            text.textContent = data.message;
+            body.append(text);
+        }
+        if (data.attachment) body.append(attachmentElement(data.attachment));
+        body.append(receipt);
         article.append(avatar, body);
         return article;
     }
@@ -155,6 +231,143 @@
             : `Read by ${readers.join(", ")}`;
     }
 
+    function appendFileListItem(attachment, prepend = true) {
+        if (!filesList || filesList.querySelector(`[data-attachment-id="${attachment.id}"]`)) return;
+        document.getElementById("conversation-files-empty")?.remove();
+        const article = document.createElement("article");
+        article.className = "conversation-file";
+        article.dataset.attachmentId = attachment.id;
+        const meta = document.createElement("div");
+        const filename = document.createElement("strong");
+        filename.textContent = attachment.filename;
+        const detail = document.createElement("span");
+        detail.textContent = `${attachment.uploader} · ${attachment.size} · ${formatDate(attachment.uploaded_at)}`;
+        meta.append(filename, detail);
+        const actions = document.createElement("div");
+        if (attachment.preview_url) actions.append(actionLink("Preview", attachment.preview_url, true));
+        actions.append(actionLink("Download", attachment.download_url));
+        article.append(meta, actions);
+        if (prepend) filesList.prepend(article);
+        else filesList.append(article);
+    }
+
+    function handleIncomingMessage(data) {
+        const conversationId = Number(data.conversation_id);
+        if (conversationId !== activeConversationId) {
+            if (data.callsign !== currentCallsign) incrementUnread(conversationId);
+            return;
+        }
+        const existingById = messages.querySelector(`[data-message-id="${data.id}"]`);
+        if (existingById) return;
+        const shouldAutoScroll = isNearBottom() || data.callsign === currentCallsign;
+        document.getElementById("chat-empty")?.remove();
+        const pending = data.client_id ? pendingMessage(data.client_id) : null;
+        const rendered = messageElement(
+            data,
+            data.callsign === currentCallsign ? receiptText(data.read_by) : ""
+        );
+        if (pending) pending.replaceWith(rendered);
+        else messages.append(rendered);
+        if (data.attachment) appendFileListItem(data.attachment);
+        typingUsers.delete(data.callsign);
+        updateTypingIndicator();
+        if (shouldAutoScroll) scrollToBottom(true);
+        else newMessagesButton.hidden = false;
+    }
+
+    function updatePendingAttachment(state) {
+        if (pendingAttachmentState) pendingAttachmentState.textContent = state;
+    }
+
+    function clearAttachment(delay = 0) {
+        window.setTimeout(() => {
+            selectedFile = null;
+            if (attachmentInput) attachmentInput.value = "";
+            if (pendingAttachment) pendingAttachment.hidden = true;
+            if (pendingAttachmentName) pendingAttachmentName.textContent = "";
+            if (pendingAttachmentDetail) pendingAttachmentDetail.textContent = "";
+            updatePendingAttachment("Ready");
+        }, delay);
+    }
+
+    function allowedClientFile(file) {
+        if (!file || !file.name) return "Choose a file with a valid filename.";
+        const parts = file.name.toLowerCase().split(".");
+        const extension = parts.pop();
+        const allowed = new Set((attachmentInput?.accept || "").split(",").map(item => item.replace(".", "")));
+        const dangerous = new Set(["exe", "msi", "bat", "cmd", "com", "scr", "ps1", "sh", "dll", "jar", "apk", "dmg", "iso"]);
+        if (parts.some(part => dangerous.has(part)) || dangerous.has(extension)) {
+            return "Executable and dangerous file types are blocked.";
+        }
+        if (parts.includes("js")) return "Disguised JavaScript files are blocked.";
+        if (!allowed.has(extension)) return "This file type is not supported.";
+        if (maximumUploadBytes && file.size > maximumUploadBytes) {
+            return `The file is larger than the ${formatFileSize(maximumUploadBytes)} limit.`;
+        }
+        if (!file.size) return "The selected file is empty.";
+        return "";
+    }
+
+    function selectAttachment(file) {
+        if (!attachmentEnabled || uploading) return;
+        const error = allowedClientFile(file);
+        if (error) {
+            clearAttachment();
+            setError(error);
+            return;
+        }
+        selectedFile = file;
+        pendingAttachment.hidden = false;
+        pendingAttachmentName.textContent = file.name;
+        pendingAttachmentDetail.textContent = formatFileSize(file.size);
+        updatePendingAttachment("Ready");
+        setError("");
+    }
+
+    async function sendAttachment(message) {
+        if (!selectedFile || uploading) return;
+        uploading = true;
+        const clientId = pendingId();
+        updatePendingAttachment("Uploading");
+        messageForm.querySelector("button[type='submit']").disabled = true;
+        removeAttachment.disabled = true;
+        const formData = new FormData();
+        formData.append("file", selectedFile, selectedFile.name);
+        formData.append("message", message);
+        formData.append("client_id", clientId);
+        try {
+            const response = await fetch(workspace.dataset.uploadUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "X-CSRFToken": workspace.dataset.csrf,
+                    "X-Requested-With": "fetch",
+                    "Accept": "application/json"
+                },
+                body: formData
+            });
+            const contentType = response.headers.get("content-type") || "";
+            const payload = contentType.includes("application/json")
+                ? await response.json()
+                : {ok: false, error: response.status === 413 ? "The file is too large." : "Your session may have expired. Refresh and try again."};
+            if (!response.ok || !payload.ok) throw new Error(payload.error || "Upload failed.");
+            handleIncomingMessage(payload.message);
+            updatePendingAttachment("Sent");
+            messageInput.value = "";
+            window.clearTimeout(typingTimer);
+            stopTyping();
+            setError("");
+            clearAttachment(700);
+        } catch (error) {
+            updatePendingAttachment("Failed");
+            setError(error.message || "Upload failed. Try again.");
+        } finally {
+            uploading = false;
+            messageForm.querySelector("button[type='submit']").disabled = false;
+            removeAttachment.disabled = false;
+        }
+    }
+
     messageInput.addEventListener("input", () => {
         const hasText = messageInput.value.trim().length > 0;
         if (hasText && !typingActive) {
@@ -169,6 +382,10 @@
     messageForm.addEventListener("submit", event => {
         event.preventDefault();
         const message = messageInput.value.trim();
+        if (selectedFile) {
+            sendAttachment(message);
+            return;
+        }
         if (!message) return;
         const clientId = pendingId();
         document.getElementById("chat-empty")?.remove();
@@ -192,31 +409,48 @@
         messageInput.focus();
     });
 
-    socket.on("receive_message", data => {
-        const conversationId = Number(data.conversation_id);
-        if (conversationId !== activeConversationId) {
-            if (data.callsign !== currentCallsign) incrementUnread(conversationId);
-            return;
-        }
-        const shouldAutoScroll = isNearBottom() || data.callsign === currentCallsign;
-        document.getElementById("chat-empty")?.remove();
-        const existing = data.client_id ? pendingMessage(data.client_id) : null;
-        if (existing) {
-            existing.dataset.messageId = data.id;
-            existing.classList.remove("message-pending");
-            existing.querySelector("time").textContent = formatTime(data.created_at);
-            existing.querySelector(".read-receipt").textContent = receiptText(data.read_by);
-        } else if (!messages.querySelector(`[data-message-id="${data.id}"]`)) {
-            messages.append(messageElement(
-                data,
-                data.callsign === currentCallsign ? receiptText(data.read_by) : ""
-            ));
-        }
-        typingUsers.delete(data.callsign);
-        updateTypingIndicator();
-        if (shouldAutoScroll) scrollToBottom(true);
-        else newMessagesButton.hidden = false;
+    if (attachmentInput) attachmentInput.addEventListener("change", () => {
+        selectAttachment(attachmentInput.files?.[0]);
     });
+    if (removeAttachment) removeAttachment.addEventListener("click", () => {
+        if (!uploading) clearAttachment();
+    });
+
+    if (attachmentEnabled) {
+        chatContainer.addEventListener("dragenter", event => {
+            if (!event.dataTransfer?.types.includes("Files")) return;
+            event.preventDefault();
+            dragDepth += 1;
+            chatContainer.classList.add("file-dragover");
+        });
+        chatContainer.addEventListener("dragover", event => {
+            if (!event.dataTransfer?.types.includes("Files")) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+        });
+        chatContainer.addEventListener("dragleave", event => {
+            if (!event.dataTransfer?.types.includes("Files")) return;
+            dragDepth = Math.max(0, dragDepth - 1);
+            if (!dragDepth) chatContainer.classList.remove("file-dragover");
+        });
+        chatContainer.addEventListener("drop", event => {
+            if (!event.dataTransfer?.files.length) return;
+            event.preventDefault();
+            dragDepth = 0;
+            chatContainer.classList.remove("file-dragover");
+            selectAttachment(event.dataTransfer.files[0]);
+        });
+    }
+
+    function setFilesPanel(open) {
+        if (!filesPanel) return;
+        filesPanel.hidden = !open;
+        filesToggle?.setAttribute("aria-expanded", String(open));
+    }
+    filesToggle?.addEventListener("click", () => setFilesPanel(filesPanel.hidden));
+    filesClose?.addEventListener("click", () => setFilesPanel(false));
+
+    socket.on("receive_message", handleIncomingMessage);
 
     socket.on("message_ack", data => {
         if (Number(data.conversation_id) !== activeConversationId) return;

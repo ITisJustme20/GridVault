@@ -29,7 +29,14 @@ class Config:
     DESIGN_UPLOAD_MAX_BYTES = int(
         os.environ.get("DESIGN_UPLOAD_MAX_BYTES", 5 * 1024 * 1024)
     )
-    MAX_CONTENT_LENGTH = DESIGN_UPLOAD_MAX_BYTES + 1024 * 1024
+    CHAT_UPLOAD_FOLDER = os.environ.get("CHAT_UPLOAD_FOLDER")
+    CHAT_UPLOAD_MAX_BYTES = int(
+        os.environ.get("CHAT_UPLOAD_MAX_BYTES", 25 * 1024 * 1024)
+    )
+    MAX_CONTENT_LENGTH = max(
+        DESIGN_UPLOAD_MAX_BYTES,
+        CHAT_UPLOAD_MAX_BYTES,
+    ) + 1024 * 1024
 
     @classmethod
     def validate(cls) -> None:
@@ -40,4 +47,8 @@ class Config:
         if not 1024 <= cls.DESIGN_UPLOAD_MAX_BYTES <= 10 * 1024 * 1024:
             raise RuntimeError(
                 "DESIGN_UPLOAD_MAX_BYTES must be between 1 KB and 10 MB."
+            )
+        if not 1024 <= cls.CHAT_UPLOAD_MAX_BYTES <= 100 * 1024 * 1024:
+            raise RuntimeError(
+                "CHAT_UPLOAD_MAX_BYTES must be between 1 KB and 100 MB."
             )
