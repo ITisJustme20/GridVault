@@ -128,6 +128,23 @@ test("duplicating preserves every object field and offsets arrow endpoints", () 
     );
 });
 
+test("structured objects copy deeply and connectors follow object centers", () => {
+    const source = {id: "a", type: "architecture", x: 100, y: 100, width: 200, height: 100};
+    const target = {id: "b", type: "database", x: 500, y: 140, width: 180, height: 140};
+    const geometry = core.connectorGeometry(source, target);
+    assert.equal(geometry.start_x, 300);
+    assert.equal(geometry.end_x, 500);
+
+    const moved = {...target, x: 620, y: 400};
+    assert.notDeepEqual(core.connectorGeometry(source, moved), geometry);
+
+    const original = {...source, data: {name: "Gateway", nested: {state: "planned"}}};
+    const copy = core.duplicateElement(original, "copy", 4);
+    copy.data.nested.state = "active";
+    assert.equal(original.data.nested.state, "planned");
+    assert.equal(copy.id, "copy");
+});
+
 test("object movement snaps left, center, right, top, middle, and bottom", () => {
     const moving = {
         id: "moving", type: "rectangle", x: 0, y: 100,
