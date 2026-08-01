@@ -1,5 +1,14 @@
 instance/
+*.db
+*.sqlite
+*.sqlite3
 __pycache__/
 *.pyc
+.pytest_cache/
+.coverage
+.venv/
+.test-deps/
 .env
+.env.*
+!.env.example
 .vscode/
