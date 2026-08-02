@@ -57,6 +57,72 @@
     </section>
 </div>
 
+<section class="invite-ledger trust-control-section">
+    <div class="section-heading">
+        <div><p class="eyebrow">Account authority</p><h2>Operator Management</h2></div>
+    </div>
+    <div class="invite-table-wrap">
+        <table class="invite-table operator-management-table">
+            <thead><tr><th>Callsign</th><th>Specialty</th><th>Status</th><th>Created</th><th>Account</th><th>Reports</th><th>Action</th></tr></thead>
+            <tbody>
+            {% for operator in operators %}
+                <tr>
+                    <td><a class="operator-profile-link" href="{{ url_for('profiles.view_profile', callsign=operator.username) }}">{{ operator.username }}</a></td>
+                    <td>{{ operator.specialty or 'Not specified' }}</td>
+                    <td>{{ operator.status_text or 'No status set' }}</td>
+                    <td>{{ operator.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td>
+                        <strong class="account-state account-state-{{ operator.account_state|lower }}">{{ operator.account_state }}</strong>
+                        {% if operator.account_state == 'Suspended' and operator.suspension_reason %}<small class="suspension-reason">{{ operator.suspension_reason }}</small>{% endif %}
+                    </td>
+                    <td>{{ report_counts.get(operator.id, 0) }}</td>
+                    <td>
+                        {% if operator.account_state == 'Active' and operator.id != current_user.id %}
+                        <form class="suspension-form" method="post" action="{{ url_for('access_control.suspend_operator', callsign=operator.username) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <label class="sr-only" for="suspend-reason-{{ loop.index }}">Suspension reason</label>
+                            <input id="suspend-reason-{{ loop.index }}" name="reason" minlength="3" maxlength="300" required placeholder="Administrator reason">
+                            <button class="text-button danger-text" type="submit">Suspend</button>
+                        </form>
+                        {% elif operator.account_state == 'Suspended' %}
+                        <form method="post" action="{{ url_for('access_control.reactivate_operator', callsign=operator.username) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="text-button" type="submit">Reactivate</button>
+                        </form>
+                        {% else %}<span class="muted-value">Current account</span>{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="invite-ledger trust-report-section">
+    <div class="section-heading">
+        <div><p class="eyebrow">Administrator only</p><h2>Operator Reports</h2></div>
+        <span class="section-note">{{ reports|length }} total</span>
+    </div>
+    {% if reports %}
+    <div class="invite-table-wrap">
+        <table class="invite-table trust-report-table">
+            <thead><tr><th>Reported</th><th>Reported by</th><th>Category</th><th>Explanation</th><th>Created</th></tr></thead>
+            <tbody>
+            {% for report in reports %}
+                <tr>
+                    <td>{{ report.reported_user.username }}</td>
+                    <td>{{ report.reporter.username }}</td>
+                    <td>{{ report.category }}</td>
+                    <td>{{ report.explanation }}</td>
+                    <td>{{ report.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="profile-empty">No operator reports.</p>{% endif %}
+</section>
+
 <section class="invite-ledger">
     <div class="section-heading"><div><p class="eyebrow">Authorization ledger</p><h2>Invitations</h2></div></div>
     {% for status, invitations in grouped_invitations.items() %}

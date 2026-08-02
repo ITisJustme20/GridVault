@@ -32,9 +32,33 @@ DESIGN_STAGES = (
 )
 
 CONVERSATION_TYPES = ("grid", "direct", "group")
+PROFILE_SPECIALTIES = (
+    "Software",
+    "Engineering",
+    "Design",
+    "Research",
+    "Operations",
+    "Finance",
+    "Other",
+)
+REPORT_CATEGORIES = (
+    "Harassment",
+    "Spam",
+    "Threats",
+    "Unauthorized content",
+    "Impersonation",
+    "Other",
+)
 
 
 class User(UserMixin, db.Model):
+    __table_args__ = (
+        db.CheckConstraint(
+            "account_state IN ('Active', 'Suspended')",
+            name="ck_user_account_state",
+        ),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(
         db.String(30),
@@ -45,6 +69,18 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
     has_seen_orientation = db.Column(db.Boolean, nullable=False, default=True)
+    specialty = db.Column(db.String(20))
+    status_text = db.Column(db.String(120))
+    account_state = db.Column(
+        db.String(10),
+        nullable=False,
+        default="Active",
+        index=True,
+    )
+    suspended_at = db.Column(db.DateTime)
+    suspension_reason = db.Column(db.String(300))
+    suspended_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    auth_version = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(
         db.DateTime,
         nullable=False,
@@ -57,6 +93,72 @@ class User(UserMixin, db.Model):
         lazy=True,
         cascade="all, delete-orphan",
     )
+    suspended_by = db.relationship(
+        "User",
+        remote_side=[id],
+        foreign_keys=[suspended_by_user_id],
+    )
+
+
+class UserBlock(db.Model):
+    __table_args__ = (
+        db.CheckConstraint("blocker_id != blocked_id", name="ck_user_block_distinct"),
+        db.Index("idx_user_block_blocked", "blocked_id", "blocker_id"),
+    )
+
+    blocker_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        primary_key=True,
+    )
+    blocked_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        primary_key=True,
+    )
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    blocker = db.relationship("User", foreign_keys=[blocker_id])
+    blocked = db.relationship("User", foreign_keys=[blocked_id])
+
+
+class UserReport(db.Model):
+    __table_args__ = (
+        db.CheckConstraint(
+            "category IN ('Harassment', 'Spam', 'Threats', "
+            "'Unauthorized content', 'Impersonation', 'Other')",
+            name="ck_user_report_category",
+        ),
+        db.Index("idx_user_report_reported_created", "reported_user_id", "created_at"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    reporter_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False,
+        index=True,
+    )
+    reported_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False,
+        index=True,
+    )
+    category = db.Column(db.String(24), nullable=False)
+    explanation = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    reporter = db.relationship("User", foreign_keys=[reporter_id])
+    reported_user = db.relationship("User", foreign_keys=[reported_user_id])
 
 
 class Invitation(db.Model):

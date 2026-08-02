@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}Report {{ operator.username }} | GridVault{% endblock %}
+{% block topbar_title %}Report Operator{% endblock %}
+
+{% block content %}
+<section class="profile-form-panel report-form-panel">
+    <div class="profile-form-heading">
+        <p class="eyebrow">Private administrator report</p>
+        <h1>Report {{ operator.username }}</h1>
+        <p>The reported operator is not notified. Reports do not automatically suspend an account.</p>
+    </div>
+    <form method="post" class="profile-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="reported-callsign">Reported callsign</label>
+        <input id="reported-callsign" value="{{ operator.username }}" disabled>
+
+        <label for="report-category">Reason category</label>
+        <select id="report-category" name="category" required>
+            <option value="">Select a reason</option>
+            {% for category in categories %}
+                <option value="{{ category }}" {{ 'selected' if selected_category == category else '' }}>{{ category }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="report-explanation">Short explanation</label>
+        <textarea id="report-explanation" name="explanation" maxlength="500" required>{{ explanation }}</textarea>
+
+        <div class="profile-form-actions">
+            <button class="primary-button" type="submit">Submit Report</button>
+            <a class="secondary-button" href="{{ url_for('profiles.view_profile', callsign=operator.username) }}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

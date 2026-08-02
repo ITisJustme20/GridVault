@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ operator.username }} | Operator Profile{% endblock %}
+{% block topbar_title %}Operator Profile{% endblock %}
+
+{% block content %}
+<section class="operator-profile-card">
+    <div class="operator-profile-heading">
+        <div>
+            <p class="eyebrow">Operator profile</p>
+            <h1>{{ operator.username }}</h1>
+        </div>
+        {% if operator.id == current_user.id %}
+            <a class="primary-button" href="{{ url_for('profiles.edit_profile') }}">Edit Profile</a>
+        {% endif %}
+    </div>
+
+    <dl class="operator-profile-facts">
+        <div><dt>Callsign</dt><dd>{{ operator.username }}</dd></div>
+        <div><dt>Specialty</dt><dd>{{ operator.specialty or 'Not specified' }}</dd></div>
+        <div><dt>Status</dt><dd>{{ operator.status_text or 'No status set' }}</dd></div>
+        <div><dt>Joined</dt><dd>{{ operator.created_at.strftime('%B %d, %Y') }}</dd></div>
+    </dl>
+
+    <section class="shared-groups" aria-labelledby="shared-groups-title">
+        <p class="eyebrow">Mutual access</p>
+        <h2 id="shared-groups-title">Shared Groups</h2>
+        {% if shared_groups %}
+            <ul>
+                {% for group in shared_groups %}
+                    <li><a href="{{ url_for('hub.chat', conversation=group.id) }}">{{ display_name(group, current_user.id) }}</a></li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="profile-empty">No shared Groups.</p>
+        {% endif %}
+    </section>
+
+    {% if operator.id != current_user.id %}
+    <div class="profile-trust-actions">
+        {% if blocked_by_viewer %}
+        <form method="post" action="{{ url_for('profiles.unblock_operator', callsign=operator.username) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="secondary-button" type="submit">Unblock</button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ url_for('profiles.block_operator', callsign=operator.username) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="secondary-button" type="submit">Block</button>
+        </form>
+        {% endif %}
+        <a class="secondary-button" href="{{ url_for('profiles.report_operator', callsign=operator.username) }}">Report</a>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

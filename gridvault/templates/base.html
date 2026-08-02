@@ -79,11 +79,11 @@
                 </nav>
 
                 <div class="sidebar-footer">
-                    <a href="{{ url_for('modules.placeholder', module_slug='settings') }}" class="settings-link {{ 'active' if current_module == 'settings' else '' }}">
+                    <a href="{{ url_for('profiles.view_profile', callsign=current_user.username) }}" class="settings-link {{ 'active' if request.blueprint == 'profiles' else '' }}">
                         <span class="operator-avatar">{{ current_user.username[:2] | upper }}</span>
                         <span class="operator-copy">
                             <strong>{{ current_user.username }}</strong>
-                            <small>Operator settings</small>
+                            <small>Operator profile</small>
                         </span>
                         <span aria-hidden="true">›</span>
                     </a>

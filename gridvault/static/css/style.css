@@ -381,8 +381,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .message-own .message-avatar { border-color: rgba(216,255,99,.35); background: var(--accent-soft); }
 .message-body { min-width: 0; }
 .message-heading { display: flex; align-items: baseline; gap: 9px; }
-.message-heading strong { color: var(--cyan); font-size: 11px; }
-.message-own .message-heading strong { color: var(--accent); }
+.message-heading strong, .message-callsign { color: var(--cyan); font-size: 11px; font-weight: 700; }
+.message-own .message-heading strong, .message-own .message-callsign { color: var(--accent); }
+.message-callsign:hover, .operator-profile-link:hover, .member-profile-links a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .message-heading time { color: #5b686e; font: 8px "SFMono-Regular", Consolas, monospace; }
 .message-body > p { margin: 3px 0 0; color: #d4dad7; overflow-wrap: anywhere; font-size: 12px; line-height: 1.55; }
 .read-receipt { display: block; min-height: 14px; margin-top: 3px; color: #627076; font-size: 8px; }
@@ -580,6 +581,43 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .orientation-panel dl div { padding: 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); }
 .orientation-panel dt { color: var(--accent); font: 700 10px "SFMono-Regular", Consolas, monospace; letter-spacing: .1em; }
 .orientation-panel dd { margin: 5px 0 0; color: var(--muted-light); font-size: 11px; }
+
+.operator-profile-card, .profile-form-panel { max-width: 900px; margin: 3vh auto 0; padding: clamp(24px, 5vw, 48px); border: 1px solid var(--line-bright); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.operator-profile-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.operator-profile-heading h1, .profile-form-heading h1 { margin: 0; font-size: clamp(34px, 6vw, 58px); line-height: 1; letter-spacing: -.055em; }
+.operator-profile-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+.operator-profile-facts div { padding: 20px 0; border-bottom: 1px solid var(--line); }
+.operator-profile-facts div:nth-child(odd) { padding-right: 20px; border-right: 1px solid var(--line); }
+.operator-profile-facts div:nth-child(even) { padding-left: 20px; }
+.operator-profile-facts dt { color: var(--muted); font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .11em; }
+.operator-profile-facts dd { margin: 5px 0 0; overflow-wrap: anywhere; color: var(--text); font-size: 13px; }
+.shared-groups { padding-top: 24px; }
+.shared-groups h2 { margin: 0; font-size: 18px; }
+.shared-groups ul { display: grid; gap: 7px; margin: 14px 0 0; padding: 0; list-style: none; }
+.shared-groups li a { display: block; padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-raised); color: var(--cyan); font-size: 10px; }
+.profile-empty { margin: 14px 0 0; color: var(--muted); font-size: 10px; }
+.profile-trust-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--line); }
+.profile-trust-actions form { margin: 0; }
+.profile-form-heading > p:last-child { max-width: 640px; margin: 12px 0 0; color: var(--muted-light); font-size: 11px; }
+.profile-form { display: grid; gap: 8px; margin-top: 28px; }
+.profile-form label { margin-top: 8px; color: var(--muted-light); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
+.profile-form input, .profile-form select, .profile-form textarea, .suspension-form input { width: 100%; min-height: 43px; padding: 9px 12px; border: 1px solid #344147; border-radius: 7px; outline: 0; background: #0b1012; color: var(--text); }
+.profile-form input:disabled { color: var(--muted); cursor: not-allowed; }
+.profile-form textarea { min-height: 130px; resize: vertical; }
+.profile-form input:focus, .profile-form select:focus, .profile-form textarea:focus, .suspension-form input:focus { border-color: rgba(216,255,99,.55); box-shadow: 0 0 0 3px rgba(216,255,99,.05); }
+.profile-form-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+.trust-control-section, .trust-report-section { margin-bottom: 18px; }
+.operator-management-table { min-width: 1040px; }
+.operator-profile-link { color: var(--cyan); font-weight: 700; }
+.account-state { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.account-state-active { color: var(--accent); }
+.account-state-suspended { color: var(--danger); }
+.suspension-reason { display: block; max-width: 220px; margin-top: 4px; color: var(--muted); overflow-wrap: anywhere; }
+.suspension-form { min-width: 235px; display: flex; align-items: center; gap: 8px; margin: 0; }
+.suspension-form input { min-height: 34px; padding: 6px 8px; font-size: 9px; }
+.trust-report-table { min-width: 900px; }
+.trust-report-table td:nth-child(4) { max-width: 420px; overflow-wrap: anywhere; white-space: normal; }
+.member-profile-links a { color: var(--cyan); }
 
 .vault-header,
 .form-heading,
@@ -1073,6 +1111,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
     .auth-pitch h1 { font-size: 42px; }
     .invite-code-row { flex-direction: column; }
     .orientation-panel dl { grid-template-columns: 1fr; }
+    .operator-profile-heading { align-items: stretch; flex-direction: column; }
+    .operator-profile-facts { grid-template-columns: 1fr; }
+    .operator-profile-facts div:nth-child(odd), .operator-profile-facts div:nth-child(even) { padding-inline: 0; border-right: 0; }
+    .profile-form-actions, .profile-trust-actions { display: grid; grid-template-columns: 1fr; }
+    .profile-form-actions > *, .profile-trust-actions > *, .profile-trust-actions button { width: 100%; }
     .vault-header, .form-heading, .project-detail-header { align-items: stretch; flex-direction: column; }
     .vault-header .primary-button { align-self: stretch; }
     .vault-search { grid-template-columns: 1fr; }

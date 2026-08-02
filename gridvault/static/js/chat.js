@@ -195,7 +195,9 @@
         body.className = "message-body";
         const heading = document.createElement("div");
         heading.className = "message-heading";
-        const callsign = document.createElement("strong");
+        const callsign = document.createElement("a");
+        callsign.className = "message-callsign";
+        callsign.href = `/operators/${encodeURIComponent(data.callsign)}`;
         callsign.textContent = data.callsign;
         const time = document.createElement("time");
         time.textContent = formatTime(data.created_at);
