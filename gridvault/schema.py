@@ -48,6 +48,43 @@ def _add_missing_user_columns() -> None:
                     "BOOLEAN NOT NULL DEFAULT 1"
                 )
             )
+        if "specialty" not in columns:
+            connection.execute(text("ALTER TABLE user ADD COLUMN specialty VARCHAR(20)"))
+        if "status_text" not in columns:
+            connection.execute(text("ALTER TABLE user ADD COLUMN status_text VARCHAR(120)"))
+        if "account_state" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE user ADD COLUMN account_state "
+                    "VARCHAR(10) NOT NULL DEFAULT 'Active'"
+                )
+            )
+        if "suspended_at" not in columns:
+            connection.execute(text("ALTER TABLE user ADD COLUMN suspended_at DATETIME"))
+        if "suspension_reason" not in columns:
+            connection.execute(
+                text("ALTER TABLE user ADD COLUMN suspension_reason VARCHAR(300)")
+            )
+        if "suspended_by_user_id" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE user ADD COLUMN suspended_by_user_id "
+                    "INTEGER REFERENCES user(id)"
+                )
+            )
+        if "auth_version" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE user ADD COLUMN auth_version "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
+            )
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_user_account_state "
+                "ON user (account_state)"
+            )
+        )
 
 
 def _add_missing_message_columns() -> None:

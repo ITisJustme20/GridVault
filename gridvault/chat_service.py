@@ -6,6 +6,7 @@ from sqlalchemy import or_
 
 from .extensions import db
 from .models import Conversation, ConversationMember, Message, User
+from .trust_service import block_between
 
 
 GRID_NAME = "GRID"
@@ -63,7 +64,20 @@ def authorized_conversation(
             return None, None
         return conversation, membership
     membership = membership_for(conversation.id, user.id)
-    return (conversation, membership) if membership else (None, None)
+    if membership is None:
+        return None, None
+    if conversation.type == "direct":
+        peer_id = next(
+            (
+                item.user_id
+                for item in conversation.memberships
+                if item.user_id != user.id
+            ),
+            None,
+        )
+        if peer_id is None or block_between(user.id, peer_id) is not None:
+            return None, None
+    return conversation, membership
 
 
 def accessible_conversations(user: User) -> list[Conversation]:
@@ -76,7 +90,22 @@ def accessible_conversations(user: User) -> list[Conversation]:
         .where(or_(Conversation.id == grid.id, Conversation.id.in_(member_ids)))
         .order_by(Conversation.updated_at.desc(), Conversation.id)
     ).scalars().all()
-    return conversations
+    visible = []
+    for conversation in conversations:
+        if conversation.type != "direct":
+            visible.append(conversation)
+            continue
+        peer_id = next(
+            (
+                membership.user_id
+                for membership in conversation.memberships
+                if membership.user_id != user.id
+            ),
+            None,
+        )
+        if peer_id is not None and block_between(user.id, peer_id) is None:
+            visible.append(conversation)
+    return visible
 
 
 def direct_key(first_user_id: int, second_user_id: int) -> str:

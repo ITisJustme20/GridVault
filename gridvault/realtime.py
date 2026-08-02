@@ -20,6 +20,7 @@ from .chat_service import (
 )
 from .extensions import db, socketio
 from .models import Message, User
+from .trust_service import blocked_user_ids
 
 
 connected_users: dict[int, dict[str, object]] = {}
@@ -30,17 +31,50 @@ message_receipts: dict[int, set[int]] = {}
 CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
-def get_online_callsigns() -> list[str]:
+def get_online_callsigns(viewer_id: int | None = None) -> list[str]:
+    hidden_ids = blocked_user_ids(viewer_id) if viewer_id is not None else set()
     callsigns = [
         str(user_data["callsign"])
-        for user_data in connected_users.values()
+        for user_id, user_data in connected_users.items()
         if user_data["sids"]
+        and user_id not in hidden_ids
+        and (
+            (user := db.session.get(User, user_id)) is not None
+            and user.account_state == "Active"
+        )
     ]
     return sorted(callsigns, key=str.lower)
 
 
 def broadcast_online_users() -> None:
-    socketio.emit("online_users", {"users": get_online_callsigns()})
+    for user_id, user_data in list(connected_users.items()):
+        if not user_data["sids"]:
+            continue
+        socketio.emit(
+            "online_users",
+            {"users": get_online_callsigns(user_id)},
+            to=user_room(user_id),
+        )
+
+
+def disconnect_user_sessions(user_id: int) -> None:
+    """Invalidate active Socket.IO connections after account suspension."""
+    user_data = connected_users.get(user_id)
+    if user_data is None:
+        return
+    for sid in list(user_data["sids"]):
+        socketio.server.disconnect(sid, namespace="/")
+
+
+def _active_socket_user() -> bool:
+    if not current_user.is_authenticated:
+        disconnect()
+        return False
+    user = db.session.get(User, current_user.id)
+    if user is None or user.account_state != "Active":
+        disconnect()
+        return False
+    return True
 
 
 def _conversation_id(data, *, default_grid=False) -> int | None:
@@ -70,7 +104,7 @@ def _authorized(data, *, default_grid=False):
 
 @socketio.on("connect")
 def handle_connect():
-    if not current_user.is_authenticated:
+    if not _active_socket_user():
         return False
 
     user_id = current_user.id
@@ -108,8 +142,7 @@ def handle_disconnect():
 
 @socketio.on("subscribe_conversation")
 def handle_subscribe(data):
-    if not current_user.is_authenticated:
-        disconnect()
+    if not _active_socket_user():
         return
     conversation, _ = _authorized(data)
     if conversation is None:
@@ -120,8 +153,7 @@ def handle_subscribe(data):
 
 @socketio.on("send_message")
 def handle_message(data):
-    if not current_user.is_authenticated:
-        disconnect()
+    if not _active_socket_user():
         return
     if not isinstance(data, dict):
         emit("message_error", {"error": "The message payload is invalid."})
@@ -180,7 +212,7 @@ def broadcast_message(message: Message, client_id: str = "") -> dict[str, object
 
 
 def _typing_event(data, event_name: str):
-    if not current_user.is_authenticated:
+    if not _active_socket_user():
         return
     conversation, _ = _authorized(data, default_grid=True)
     if conversation is None:
@@ -208,7 +240,7 @@ def handle_stop_typing(data=None):
 
 @socketio.on("mark_read")
 def handle_mark_read(data):
-    if not current_user.is_authenticated or not isinstance(data, dict):
+    if not _active_socket_user() or not isinstance(data, dict):
         return
     conversation, membership = _authorized(data, default_grid=True)
     if conversation is None or membership is None:

@@ -23,6 +23,14 @@ Administrator access uses the additive `User.is_admin` flag. Existing installati
 
 Invitation consumption validates and normalizes the callsign, hashes the passphrase with Werkzeug's established password hashing, and atomically changes the authorization from Active to Used in the same database transaction that creates the user. A conditional update prevents two concurrent requests from consuming the same code. Newly invited operators see one concise orientation screen; existing users retain their normal login and do not see it.
 
+## Operator profiles and trust controls
+
+Each callsign has a compact authenticated profile containing only specialty, short status, join date, and Groups shared with the viewer. Operators may edit only their own specialty and status. Callsigns remain permanent, and profile views never expose Direct conversations, non-mutual Groups, reports, suspension reasons, invitation details, or internal identifiers.
+
+Blocking is private and reversible. A block disables Direct discovery, history access, files, messages, typing, and presence in both directions while preserving GRID and shared Group access and history. Reports use a fixed reason category and bounded plain-text explanation and are visible only in administrator Access Control.
+
+Administrators can suspend or reactivate accounts from Access Control. Suspension preserves all historical content, rotates the account's authentication version, disconnects active sockets, and prevents HTTP, WebSocket, and login activity. Reactivation requires a fresh login; previously invalidated sessions do not resume.
+
 ## Project Vault
 
 Project Vault v1 provides a complete authenticated project workflow:
@@ -96,7 +104,7 @@ For production, set both `GRIDVAULT_ENV=production` and a strong `SECRET_KEY`. N
 
 The application factory explicitly keeps Flask's instance directory at `instance/`, and the `User` and `Message` models retain their original table and column names. Existing `instance/gridvault.db` files therefore continue to provide the same user accounts and stored messages after upgrading.
 
-GridVault uses an additive schema strategy: `ensure_schema()` calls SQLAlchemy's check-first table creation to create only missing tables and indexes, including the invitation ledger. It adds only the defaulted `is_admin` and `has_seen_orientation` columns to legacy users; existing accounts default to already oriented. It never drops, rewrites, or renames the existing `user` or `message` tables. The automated suite validates this strategy against a temporary legacy-format database before releases are merged.
+GridVault uses an additive schema strategy: `ensure_schema()` calls SQLAlchemy's check-first table creation to create only missing tables and indexes, including invitation, block, and report records. It adds only nullable or safely defaulted profile, account-state, and session-version columns to legacy users; existing accounts remain Active and already oriented. It never drops, rewrites, or renames the existing `user` or `message` tables. The automated suite validates this strategy against a temporary legacy-format database before releases are merged.
 
 The entire `instance/` directory plus common SQLite extensions are ignored. Do not commit a database file.
 
@@ -132,7 +140,7 @@ node --check gridvault/static/js/chat.js
 node --check gridvault/static/js/access_control.js
 ```
 
-The suite verifies invitation-only authentication, atomic single-use authorization, administrator permissions, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
+The suite verifies invitation-only authentication, operator-profile privacy, Direct blocking, private reporting, suspension and session invalidation, administrator permissions, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
 
 ## Production serving
 

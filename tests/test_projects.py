@@ -340,9 +340,24 @@ class ProjectVaultTestCase(unittest.TestCase):
                     column["name"]
                     for column in inspect(db.engine).get_columns("user")
                 }
-                self.assertTrue({"is_admin", "has_seen_orientation"}.issubset(user_columns))
+                self.assertTrue(
+                    {
+                        "is_admin",
+                        "has_seen_orientation",
+                        "specialty",
+                        "status_text",
+                        "account_state",
+                        "suspended_at",
+                        "suspension_reason",
+                        "suspended_by_user_id",
+                        "auth_version",
+                    }.issubset(user_columns)
+                )
                 self.assertIn("invitation", table_names)
+                self.assertIn("user_block", table_names)
+                self.assertIn("user_report", table_names)
                 self.assertTrue(db.session.get(User, 1).has_seen_orientation)
+                self.assertEqual(db.session.get(User, 1).account_state, "Active")
                 db.session.remove()
                 db.engine.dispose()
 

@@ -45,6 +45,7 @@ from ..file_vault import (
     validate_upload,
 )
 from ..models import ChatAttachment, Conversation, ConversationMember, Message, User
+from ..trust_service import block_between
 
 
 hub_bp = Blueprint("hub", __name__)
@@ -69,7 +70,10 @@ def _users_for_callsigns(callsigns: list[str]) -> tuple[list[User], list[str]]:
         return [], []
     requested = {callsign.lower(): callsign for callsign in callsigns}
     users = db.session.execute(
-        db.select(User).where(db.func.lower(User.username).in_(requested))
+        db.select(User).where(
+            db.func.lower(User.username).in_(requested),
+            User.account_state == "Active",
+        )
     ).scalars().all()
     found = {user.username.lower() for user in users}
     missing = [original for key, original in requested.items() if key not in found]
@@ -146,7 +150,10 @@ def chat():
     ).scalars().all() if active.type in {"direct", "group"} else []
     operators = db.session.execute(
         db.select(User)
-        .where(User.id != current_user.id)
+        .where(
+            User.id != current_user.id,
+            User.account_state == "Active",
+        )
         .order_by(db.func.lower(User.username))
     ).scalars().all()
     active_members = sorted(
@@ -360,6 +367,9 @@ def create_conversation():
         return redirect(url_for("hub.chat"))
 
     if len(participants) == 1:
+        if block_between(current_user.id, participants[0].id) is not None:
+            flash("Direct conversation is unavailable.", "error")
+            return redirect(url_for("hub.chat"))
         key = direct_key(current_user.id, participants[0].id)
         conversation = db.session.execute(
             db.select(Conversation).where(
@@ -421,7 +431,10 @@ def add_group_member(conversation_id: int):
 
     callsign = request.form.get("callsign", "").strip()
     user = db.session.execute(
-        db.select(User).where(db.func.lower(User.username) == callsign.lower())
+        db.select(User).where(
+            db.func.lower(User.username) == callsign.lower(),
+            User.account_state == "Active",
+        )
     ).scalar_one_or_none()
     if user is None:
         flash("That callsign does not exist.", "error")

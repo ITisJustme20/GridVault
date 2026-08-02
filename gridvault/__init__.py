@@ -5,7 +5,7 @@ from __future__ import annotations
 import secrets
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, session
 
 from .config import Config
 from .extensions import csrf, db, login_manager, socketio
@@ -74,17 +74,27 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .blueprints.hub import hub_bp
     from .blueprints.modules import modules_bp
     from .blueprints.projects import projects_bp
+    from .blueprints.profiles import profiles_bp
     from .invitations import is_gridvault_admin
     from .models import User
+    from .trust_service import SESSION_AUTH_VERSION_KEY
     from .schema import ensure_schema
     from . import realtime  # noqa: F401 - registers Socket.IO handlers
 
     @login_manager.user_loader
     def load_user(user_id):
         try:
-            return db.session.get(User, int(user_id))
+            user = db.session.get(User, int(user_id))
         except (TypeError, ValueError):
             return None
+        if user is None or user.account_state != "Active":
+            return None
+        session_version = session.get(SESSION_AUTH_VERSION_KEY)
+        if session_version is None and user.auth_version == 0:
+            session[SESSION_AUTH_VERSION_KEY] = 0
+        elif session_version != user.auth_version:
+            return None
+        return user
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(access_control_bp)
@@ -93,6 +103,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(projects_bp)
     app.register_blueprint(design_lab_bp)
     app.register_blueprint(modules_bp)
+    app.register_blueprint(profiles_bp)
 
     app.jinja_env.globals["is_gridvault_admin"] = is_gridvault_admin
 

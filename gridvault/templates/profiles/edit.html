@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Profile | GridVault{% endblock %}
+{% block topbar_title %}Edit Profile{% endblock %}
+
+{% block content %}
+<section class="profile-form-panel">
+    <div class="profile-form-heading">
+        <p class="eyebrow">My operator profile</p>
+        <h1>Edit Profile</h1>
+        <p>Your callsign is permanent. Only specialty and short status can be changed here.</p>
+    </div>
+    <form method="post" class="profile-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="profile-callsign">Callsign</label>
+        <input id="profile-callsign" value="{{ current_user.username }}" disabled>
+
+        <label for="specialty">Specialty</label>
+        <select id="specialty" name="specialty">
+            <option value="">Not specified</option>
+            {% for specialty in specialties %}
+                <option value="{{ specialty }}" {{ 'selected' if selected_specialty == specialty else '' }}>{{ specialty }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="status-text">Short status</label>
+        <input id="status-text" name="status_text" maxlength="120" value="{{ status_text }}" placeholder="Optional, 120 characters maximum">
+
+        <div class="profile-form-actions">
+            <button class="primary-button" type="submit">Save Profile</button>
+            <a class="secondary-button" href="{{ url_for('profiles.view_profile', callsign=current_user.username) }}">Cancel</a>
+        </div>
+    </form>
+</section>
+{% endblock %}

@@ -1,6 +1,6 @@
 """Invitation-only access, identity verification, and session routes."""
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from werkzeug.security import check_password_hash
 
@@ -12,6 +12,7 @@ from ..invitations import (
     record_invitation_failure,
 )
 from ..models import User
+from ..trust_service import SESSION_AUTH_VERSION_KEY
 
 
 auth_bp = Blueprint("auth", __name__)
@@ -48,6 +49,7 @@ def access_gate():
             return render_template("auth/access_gate.html"), 400
         clear_invitation_failures(attempt_key)
         login_user(user)
+        session[SESSION_AUTH_VERSION_KEY] = user.auth_version
         return redirect(url_for("auth.orientation"))
 
     return render_template("auth/access_gate.html")
@@ -69,7 +71,11 @@ def login():
         if user is None or not check_password_hash(user.password_hash, password):
             flash("Incorrect callsign or passphrase.", "error")
             return render_template("auth/login.html"), 400
+        if user.account_state != "Active":
+            flash("Account access is unavailable.", "error")
+            return render_template("auth/login.html"), 403
         login_user(user)
+        session[SESSION_AUTH_VERSION_KEY] = user.auth_version
         if not user.has_seen_orientation:
             return redirect(url_for("auth.orientation"))
         return redirect(url_for("console.dashboard"))
@@ -93,4 +99,5 @@ def orientation():
 def logout():
     if current_user.is_authenticated:
         logout_user()
+    session.pop(SESSION_AUTH_VERSION_KEY, None)
     return redirect(url_for("auth.login"))
