@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}Signal Queue | GridVault{% endblock %}
+{% block topbar_title %}Signal Queue{% endblock %}
+
+{% block content %}
+<section id="signal-queue" class="signal-queue-page" aria-labelledby="signal-queue-title">
+    <header class="signal-queue-header">
+        <div>
+            <p class="eyebrow">Required attention</p>
+            <h1 id="signal-queue-title">SIGNAL QUEUE</h1>
+            <p>Private transmissions and actions that still require your attention.</p>
+        </div>
+        <strong class="signal-total">{{ signals | length }} ACTIVE</strong>
+    </header>
+
+    {% if signals %}
+    <ol class="signal-list">
+        {% for signal in signals %}
+        <li class="signal-item">
+            <div class="signal-copy">
+                <strong>{{ signal.type }}</strong>
+                <p>{{ signal.description }}</p>
+                <time datetime="{{ signal.created_at.isoformat() }}">{{ signal.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</time>
+            </div>
+            <div class="signal-actions">
+                {% if signal.action_method == 'post' %}
+                <form method="post" action="{{ signal.action_url }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="primary-button" type="submit">{{ signal.action }}</button>
+                </form>
+                {% else %}
+                <a class="primary-button" href="{{ signal.action_url }}" {{ 'target="_blank" rel="noopener"' if signal.action == 'PREVIEW' else '' }}>{{ signal.action }}</a>
+                {% endif %}
+                {% if signal.dismiss_url %}
+                <form method="post" action="{{ signal.dismiss_url }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="text-button" type="submit">DISMISS</button>
+                </form>
+                {% endif %}
+            </div>
+        </li>
+        {% endfor %}
+    </ol>
+    {% else %}
+    <div class="signal-empty-state">
+        <p class="eyebrow">Queue clear</p>
+        <strong>NO ACTIVE SIGNALS</strong>
+        <p>Important unread transmissions, unopened files, and required reviews will appear here.</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

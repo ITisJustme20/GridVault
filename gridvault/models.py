@@ -166,9 +166,12 @@ class UserReport(db.Model):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    reviewed_at = db.Column(db.DateTime)
+    reviewed_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
 
     reporter = db.relationship("User", foreign_keys=[reporter_id])
     reported_user = db.relationship("User", foreign_keys=[reported_user_id])
+    reviewed_by = db.relationship("User", foreign_keys=[reviewed_by_user_id])
 
 
 class Invitation(db.Model):
@@ -385,6 +388,75 @@ class ChatAttachment(db.Model):
         "User",
         backref=db.backref("chat_attachments", lazy=True),
     )
+
+
+class AttachmentOpen(db.Model):
+    __table_args__ = (
+        db.Index("idx_attachment_open_user_opened", "user_id", "opened_at"),
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    attachment_id = db.Column(
+        db.String(32),
+        db.ForeignKey("chat_attachment.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    opened_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    user = db.relationship("User")
+    attachment = db.relationship("ChatAttachment")
+
+
+class OperatorSignal(db.Model):
+    __table_args__ = (
+        db.CheckConstraint(
+            "signal_type IN ('GROUP ACCESS', 'SYSTEM')",
+            name="ck_operator_signal_type",
+        ),
+        db.UniqueConstraint(
+            "recipient_user_id",
+            "signal_type",
+            "conversation_id",
+            name="uq_operator_signal_conversation",
+        ),
+        db.Index(
+            "idx_operator_signal_recipient_active",
+            "recipient_user_id",
+            "resolved_at",
+            "created_at",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    recipient_user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    signal_type = db.Column(db.String(20), nullable=False)
+    conversation_id = db.Column(
+        db.Integer,
+        db.ForeignKey("conversation.id", ondelete="CASCADE"),
+    )
+    description = db.Column(db.String(200))
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    resolved_at = db.Column(db.DateTime)
+
+    recipient = db.relationship("User")
+    conversation = db.relationship("Conversation")
 
 
 project_assignment = db.Table(

@@ -5,7 +5,8 @@ GridVault is a secure, authenticated mission workspace for small teams. The Miss
 ## Foundation modules
 
 - **Mission Console** — authenticated landing page with system metrics, recent signals, and module access
-- **The Hub** — live team channel with the original GridVault chat behavior preserved
+- **The Hub** — persistent GRID, Direct, and private Group conversations with real-time delivery
+- **Signals** — private, actionable unread transmissions, unopened files, group access, and administrator reviews
 - **Design Lab** — visual concept boards, versioned dossiers, and review publishing
 - **Engineering Bay** — staged build operations workspace
 - **Project Vault** — durable project records, assignments, objectives, activity, and discussion
@@ -40,6 +41,12 @@ Live Grid is an authenticated visual navigation and broad-presence layer for GRI
 Operators choose between `Sector` visibility, which shares only the broad current sector, and the default `Active` visibility, which hides the sector. The current sector is ephemeral and selected from a strict server-side allowlist; the most recently active authenticated tab wins. Blocking and suspension rules continue to filter presence.
 
 Recent map pulses are short-lived and in memory only. They contain an abstract type and sector, never callsigns, Direct participants, Group names, message text, file names, board titles, invitation activity, reports, or moderation details.
+
+## Signal Queue
+
+The authenticated **SIGNALS** view is a compact attention queue, not a general notification feed. It derives unread Direct and Group transmissions from existing per-member read state, derives unopened authorized file transfers from File Vault access, and stores only the minimal durable state needed for group-access notices and rare system actions. GRID traffic, typing, read receipts, presence changes, profiles, boards, Live Grid activity, and Identity Discs do not create signals.
+
+Opening a conversation clears its unread transmission state through the existing read flow. Previewing or downloading an authorized file records that operator's first open. Opening or dismissing a new Group access notice resolves it. Administrators receive a generic action for unresolved operator reports without exposing report details to ordinary operators. All queue derivation and actions are authorized server-side, blocked Directs are filtered, state-changing actions use CSRF protection, and Socket.IO sends server-calculated count updates without trusting client membership claims.
 
 ## Project Vault
 
@@ -115,7 +122,7 @@ For production, set `GRIDVAULT_ENV=production`, a strong `SECRET_KEY`, and a sep
 
 The application factory explicitly keeps Flask's instance directory at `instance/`, and the `User` and `Message` models retain their original table and column names. Existing `instance/gridvault.db` files therefore continue to provide the same user accounts and stored messages after upgrading.
 
-GridVault uses an additive schema strategy: `ensure_schema()` calls SQLAlchemy's check-first table creation to create only missing tables and indexes, including invitation, block, and report records. It adds only nullable or safely defaulted profile, account-state, session-version, and presence-visibility columns to legacy users; existing accounts remain Active, presence-private, and already oriented. It never drops, rewrites, or renames the existing `user` or `message` tables. The automated suite validates this strategy against a temporary legacy-format database before releases are merged.
+GridVault uses an additive schema strategy: `ensure_schema()` calls SQLAlchemy's check-first table creation to create only missing tables and indexes, including invitation, block, report, attachment-open, and minimal stored-signal records. It adds nullable report-review columns and only nullable or safely defaulted profile, account-state, session-version, and presence-visibility columns to legacy users; existing accounts remain Active, presence-private, and already oriented. It never drops, rewrites, or renames the existing `user` or `message` tables. The automated suite validates this strategy against a temporary legacy-format database before releases are merged.
 
 The entire `instance/` directory plus common SQLite extensions are ignored. Do not commit a database file.
 
@@ -149,9 +156,10 @@ node --check gridvault/static/js/design_board_core.js
 node --check gridvault/static/js/design_board.js
 node --check gridvault/static/js/chat.js
 node --check gridvault/static/js/access_control.js
+node --check gridvault/static/js/signals.js
 ```
 
-The suite verifies invitation-only authentication, operator-profile privacy, deterministic Identity Discs, Live Grid presence privacy and abstract pulses, Direct blocking, private reporting, suspension and session invalidation, administrator permissions, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
+The suite verifies invitation-only authentication, operator-profile privacy, deterministic Identity Discs, Live Grid presence privacy and abstract pulses, Direct blocking, private reporting, Signal Queue privacy and resolution, suspension and session invalidation, administrator permissions, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
 
 ## Production serving
 

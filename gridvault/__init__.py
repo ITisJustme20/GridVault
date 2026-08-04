@@ -6,6 +6,7 @@ import secrets
 from pathlib import Path
 
 from flask import Flask, request, session
+from flask_login import current_user
 
 from .config import Config
 from .extensions import csrf, db, login_manager, socketio
@@ -78,8 +79,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .blueprints.modules import modules_bp
     from .blueprints.projects import projects_bp
     from .blueprints.profiles import profiles_bp
+    from .blueprints.signals import signals_bp
     from .invitations import is_gridvault_admin
     from .models import User
+    from .signal_service import signal_count
     from .trust_service import SESSION_AUTH_VERSION_KEY
     from .schema import ensure_schema
     from . import realtime  # noqa: F401 - registers Socket.IO handlers
@@ -108,6 +111,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(design_lab_bp)
     app.register_blueprint(modules_bp)
     app.register_blueprint(profiles_bp)
+    app.register_blueprint(signals_bp)
 
     app.jinja_env.globals["is_gridvault_admin"] = is_gridvault_admin
 
@@ -119,6 +123,11 @@ def create_app(test_config: dict | None = None) -> Flask:
         elif request.blueprint in {"profiles", "access_control"}:
             sector = "ACCESS"
         return {"grid_presence_sector": sector}
+
+    @app.context_processor
+    def inject_signal_queue_count():
+        count = signal_count(current_user) if current_user.is_authenticated else 0
+        return {"active_signal_count": count}
 
     @app.after_request
     def add_security_headers(response):

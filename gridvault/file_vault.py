@@ -284,6 +284,11 @@ def serialize_attachment(attachment: ChatAttachment) -> dict[str, object]:
         "uploader": attachment.uploader.username,
         "uploaded_at": attachment.uploaded_at.isoformat(),
         "preview_url": url_for("hub.preview_attachment", attachment_id=attachment.id) if previewable else None,
+        "thumbnail_url": url_for(
+            "hub.preview_attachment",
+            attachment_id=attachment.id,
+            inline=1,
+        ) if attachment.category == "image" else None,
         "download_url": url_for("hub.download_attachment", attachment_id=attachment.id),
         "metadata_url": url_for("hub.attachment_metadata", attachment_id=attachment.id),
     }

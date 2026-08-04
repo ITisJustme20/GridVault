@@ -98,7 +98,7 @@
     </div>
 </section>
 
-<section class="invite-ledger trust-report-section">
+<section id="operator-reports" class="invite-ledger trust-report-section">
     <div class="section-heading">
         <div><p class="eyebrow">Administrator only</p><h2>Operator Reports</h2></div>
         <span class="section-note">{{ reports|length }} total</span>
@@ -106,7 +106,7 @@
     {% if reports %}
     <div class="invite-table-wrap">
         <table class="invite-table trust-report-table">
-            <thead><tr><th>Reported</th><th>Reported by</th><th>Category</th><th>Explanation</th><th>Created</th></tr></thead>
+            <thead><tr><th>Reported</th><th>Reported by</th><th>Category</th><th>Explanation</th><th>Created</th><th>Status</th></tr></thead>
             <tbody>
             {% for report in reports %}
                 <tr>
@@ -115,6 +115,7 @@
                     <td>{{ report.category }}</td>
                     <td>{{ report.explanation }}</td>
                     <td>{{ report.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</td>
+                    <td>{{ 'Reviewed' if report.reviewed_at else 'Open' }}</td>
                 </tr>
             {% endfor %}
             </tbody>
