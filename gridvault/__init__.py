@@ -9,6 +9,7 @@ from flask import Flask, request, session
 
 from .config import Config
 from .extensions import csrf, db, login_manager, socketio
+from .identity_disc import configure_identity_disc_secret
 
 
 def _cors_origins(value: str | None):
@@ -41,6 +42,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         )
 
     instance_path.mkdir(parents=True, exist_ok=True)
+    configure_identity_disc_secret(app, instance_path)
     if not app.config.get("DESIGN_UPLOAD_FOLDER"):
         app.config["DESIGN_UPLOAD_FOLDER"] = str(instance_path / "design_uploads")
     if not app.config.get("CHAT_UPLOAD_FOLDER"):

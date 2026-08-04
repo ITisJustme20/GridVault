@@ -23,6 +23,7 @@ from .chat_service import (
     user_room,
 )
 from .extensions import db, socketio
+from .identity_disc import identity_disc_for_user
 from .models import Message, User
 from .trust_service import blocked_user_ids
 
@@ -56,7 +57,7 @@ def _current_sector(user_data: dict[str, object]) -> str:
     return str(sector) if sector in LIVE_GRID_SECTORS else "ACTIVE"
 
 
-def _live_grid_operators(viewer_id: int) -> list[dict[str, str]]:
+def _live_grid_operators(viewer_id: int) -> list[dict[str, object]]:
     hidden_ids = blocked_user_ids(viewer_id)
     operators = []
     for user_id, user_data in connected_users.items():
@@ -68,7 +69,13 @@ def _live_grid_operators(viewer_id: int) -> list[dict[str, str]]:
         sector = _current_sector(user_data)
         if user_id != viewer_id and user.presence_visibility != "Sector":
             sector = "ACTIVE"
-        operators.append({"callsign": user.username, "sector": sector})
+        operators.append(
+            {
+                "callsign": user.username,
+                "sector": sector,
+                "disc": identity_disc_for_user(user)["visual"],
+            }
+        )
     return sorted(operators, key=lambda item: item["callsign"].lower())
 
 

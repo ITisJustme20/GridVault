@@ -11,6 +11,7 @@ class Config:
 
     ENVIRONMENT = os.environ.get("GRIDVAULT_ENV", "development").lower()
     SECRET_KEY = os.environ.get("SECRET_KEY")
+    IDENTITY_DISC_SECRET = os.environ.get("IDENTITY_DISC_SECRET")
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL",
         "sqlite:///gridvault.db",
@@ -51,6 +52,14 @@ class Config:
         if not 1024 <= cls.DESIGN_UPLOAD_MAX_BYTES <= 10 * 1024 * 1024:
             raise RuntimeError(
                 "DESIGN_UPLOAD_MAX_BYTES must be between 1 KB and 10 MB."
+            )
+        if cls.ENVIRONMENT == "production" and not cls.IDENTITY_DISC_SECRET:
+            raise RuntimeError(
+                "IDENTITY_DISC_SECRET must be set when GRIDVAULT_ENV=production."
+            )
+        if cls.IDENTITY_DISC_SECRET and len(cls.IDENTITY_DISC_SECRET) < 32:
+            raise RuntimeError(
+                "IDENTITY_DISC_SECRET must contain at least 32 characters."
             )
         if not 1024 <= cls.CHAT_UPLOAD_MAX_BYTES <= 100 * 1024 * 1024:
             raise RuntimeError(

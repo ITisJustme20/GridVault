@@ -99,7 +99,9 @@ class LiveGridTestCase(unittest.TestCase):
         bravo_socket.emit("live_grid_subscribe")
         private_state = self.event_payload(bravo_socket.get_received(), "live_grid_state")
         alpha_nodes = [item for item in private_state["operators"] if item["callsign"] == "PRESENCE_ALPHA"]
-        self.assertEqual(alpha_nodes, [{"callsign": "PRESENCE_ALPHA", "sector": "ACTIVE"}])
+        self.assertEqual(len(alpha_nodes), 1)
+        self.assertEqual(alpha_nodes[0]["sector"], "ACTIVE")
+        self.assertIn("disc", alpha_nodes[0])
 
         alpha.post(
             "/live-grid/presence-visibility",
@@ -109,7 +111,9 @@ class LiveGridTestCase(unittest.TestCase):
         bravo_socket.emit("live_grid_subscribe")
         sector_state = self.event_payload(bravo_socket.get_received(), "live_grid_state")
         alpha_nodes = [item for item in sector_state["operators"] if item["callsign"] == "PRESENCE_ALPHA"]
-        self.assertEqual(alpha_nodes, [{"callsign": "PRESENCE_ALPHA", "sector": "VC BOARD"}])
+        self.assertEqual(len(alpha_nodes), 1)
+        self.assertEqual(alpha_nodes[0]["sector"], "VC BOARD")
+        self.assertIn("disc", alpha_nodes[0])
         with self.app.app_context():
             alpha_user = db.session.scalar(db.select(User).where(User.username == "PRESENCE_ALPHA"))
             bravo_user = db.session.scalar(db.select(User).where(User.username == "PRESENCE_BRAVO"))
