@@ -351,6 +351,7 @@ class ProjectVaultTestCase(unittest.TestCase):
                         "suspension_reason",
                         "suspended_by_user_id",
                         "auth_version",
+                        "presence_visibility",
                     }.issubset(user_columns)
                 )
                 self.assertIn("invitation", table_names)

@@ -5,11 +5,13 @@
     if (!workspace) return;
 
     // Polling may upgrade to WebSocket, preserving HTTPS/WSS proxy compatibility.
-    const socket = io();
+    const socket = window.gridVaultSocket || io();
+    window.gridVaultSocket = socket;
     const currentCallsign = workspace.dataset.callsign;
     const activeConversationId = Number(workspace.dataset.conversationId);
     const activeConversationType = workspace.dataset.conversationType;
     const attachmentEnabled = workspace.dataset.attachmentEnabled === "true";
+    const openFilesInitially = workspace.dataset.openFiles === "true";
     const maximumUploadBytes = Number(workspace.dataset.maxUploadBytes || 0);
     const messageForm = document.getElementById("message-form");
     const messageInput = document.getElementById("message-input");
@@ -448,9 +450,15 @@
         if (!filesPanel) return;
         filesPanel.hidden = !open;
         filesToggle?.setAttribute("aria-expanded", String(open));
+        window.gridVaultPresence?.setSector(
+            open ? "FILE VAULT" : activeConversationType === "group"
+                ? "GROUPS"
+                : activeConversationType.toUpperCase()
+        );
     }
     filesToggle?.addEventListener("click", () => setFilesPanel(filesPanel.hidden));
     filesClose?.addEventListener("click", () => setFilesPanel(false));
+    if (openFilesInitially) setFilesPanel(true);
 
     socket.on("receive_message", handleIncomingMessage);
 

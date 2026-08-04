@@ -49,6 +49,7 @@ REPORT_CATEGORIES = (
     "Impersonation",
     "Other",
 )
+PRESENCE_VISIBILITIES = ("Sector", "Active")
 
 
 class User(UserMixin, db.Model):
@@ -56,6 +57,10 @@ class User(UserMixin, db.Model):
         db.CheckConstraint(
             "account_state IN ('Active', 'Suspended')",
             name="ck_user_account_state",
+        ),
+        db.CheckConstraint(
+            "presence_visibility IN ('Sector', 'Active')",
+            name="ck_user_presence_visibility",
         ),
     )
 
@@ -81,6 +86,11 @@ class User(UserMixin, db.Model):
     suspension_reason = db.Column(db.String(300))
     suspended_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
     auth_version = db.Column(db.Integer, nullable=False, default=0)
+    presence_visibility = db.Column(
+        db.String(10),
+        nullable=False,
+        default="Active",
+    )
     created_at = db.Column(
         db.DateTime,
         nullable=False,

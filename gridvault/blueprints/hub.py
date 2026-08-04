@@ -103,8 +103,11 @@ def chat():
     grid, _ = ensure_grid_membership(current_user)
     db.session.commit()
     conversations = accessible_conversations(current_user)
+    direct_conversations = [item for item in conversations if item.type == "direct"]
+    group_conversations = [item for item in conversations if item.type == "group"]
 
     requested_id = request.args.get("conversation", "").strip()
+    requested_area = request.args.get("area", "").strip().lower()
     if requested_id:
         if not requested_id.isdigit():
             abort(400)
@@ -114,11 +117,21 @@ def chat():
         )
         if active is None:
             abort(403)
+    elif requested_area:
+        if requested_area not in {"direct", "groups"}:
+            abort(400)
+        candidates = (
+            direct_conversations
+            if requested_area == "direct"
+            else group_conversations
+        )
+        active, active_membership = authorized_conversation(
+            candidates[0].id if candidates else grid.id,
+            current_user,
+        )
     else:
         active, active_membership = authorized_conversation(grid.id, current_user)
 
-    direct_conversations = [item for item in conversations if item.type == "direct"]
-    group_conversations = [item for item in conversations if item.type == "group"]
     unread_counts = {
         item.id: unread_count(
             item,
@@ -164,6 +177,17 @@ def chat():
         (user for user in active_members if user.id != current_user.id),
         None,
     ) if active.type == "direct" else None
+    presence_sector = {
+        "grid": "GRID",
+        "direct": "DIRECT",
+        "group": "GROUPS",
+    }[active.type]
+    open_files = (
+        request.args.get("files") == "1"
+        and active.type in {"direct", "group"}
+    )
+    if open_files:
+        presence_sector = "FILE VAULT"
     return render_template(
         "hub/chat.html",
         grid=grid,
@@ -184,6 +208,8 @@ def chat():
         human_file_size=human_file_size,
         attachment_accept=",".join(f".{extension}" for extension in allowed_extensions()),
         attachment_max_size=human_file_size(current_app.config["CHAT_UPLOAD_MAX_BYTES"]),
+        presence_sector=presence_sector,
+        open_files=open_files,
     )
 
 
@@ -271,9 +297,10 @@ def upload_attachment(conversation_id: int):
         current_app.logger.error("Chat attachment transaction failed.")
         return jsonify({"ok": False, "error": "The upload could not be completed."}), 500
 
-    from ..realtime import broadcast_message
+    from ..realtime import broadcast_message, record_grid_activity
 
     payload = broadcast_message(message, client_id)
+    record_grid_activity("FILE TRANSFER", "FILE VAULT")
     return jsonify({"ok": True, "message": payload}), 201
 
 

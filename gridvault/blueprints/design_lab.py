@@ -751,6 +751,9 @@ def save_board(design_id):
             }
         ), 409
     db.session.commit()
+    from ..realtime import record_grid_activity
+
+    record_grid_activity("BOARD UPDATE", "VC BOARD")
     return jsonify(
         {
             "ok": True,

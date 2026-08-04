@@ -70,6 +70,7 @@ class GridVaultTestCase(unittest.TestCase):
         paths = (
             "/hub",
             "/chat",
+            "/live-grid",
             "/design-lab",
             "/engineering-bay",
             "/project-vault",

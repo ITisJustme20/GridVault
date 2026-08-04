@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import re
+import secrets
+import time
+from collections import deque
 from datetime import datetime, timezone
+from itertools import count
 
-from flask import request
+from flask import current_app, request
 from flask_login import current_user
 from flask_socketio import disconnect, emit, join_room
 
@@ -29,6 +33,89 @@ sid_to_user_id: dict[str, int] = {}
 # state now lives durably on ConversationMember rather than in this mapping.
 message_receipts: dict[int, set[int]] = {}
 CLIENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+LIVE_GRID_ROOM = "live-grid"
+LIVE_GRID_SECTORS = frozenset(
+    {"GRID", "DIRECT", "GROUPS", "VC BOARD", "FILE VAULT", "ACCESS", "ACTIVE"}
+)
+LIVE_GRID_PULSE_TYPES = frozenset(
+    {"TRANSMISSION", "FILE TRANSFER", "BOARD UPDATE", "OPERATOR ONLINE", "OPERATOR OFFLINE"}
+)
+LIVE_GRID_ACTIVITY_TTL_SECONDS = 30
+PRESENCE_DISCONNECT_GRACE_SECONDS = 2
+recent_grid_activity: deque[dict[str, object]] = deque(maxlen=18)
+presence_sequence = count(1)
+
+
+def _current_sector(user_data: dict[str, object]) -> str:
+    activity = user_data.get("activity", {})
+    sectors = user_data.get("sectors", {})
+    if not isinstance(activity, dict) or not activity:
+        return "ACTIVE"
+    sid = max(activity, key=activity.get)
+    sector = sectors.get(sid, "ACTIVE") if isinstance(sectors, dict) else "ACTIVE"
+    return str(sector) if sector in LIVE_GRID_SECTORS else "ACTIVE"
+
+
+def _live_grid_operators(viewer_id: int) -> list[dict[str, str]]:
+    hidden_ids = blocked_user_ids(viewer_id)
+    operators = []
+    for user_id, user_data in connected_users.items():
+        if not user_data["sids"] or user_id in hidden_ids:
+            continue
+        user = db.session.get(User, user_id)
+        if user is None or user.account_state != "Active":
+            continue
+        sector = _current_sector(user_data)
+        if user_id != viewer_id and user.presence_visibility != "Sector":
+            sector = "ACTIVE"
+        operators.append({"callsign": user.username, "sector": sector})
+    return sorted(operators, key=lambda item: item["callsign"].lower())
+
+
+def _recent_activity() -> list[dict[str, str]]:
+    cutoff = time.monotonic() - LIVE_GRID_ACTIVITY_TTL_SECONDS
+    while recent_grid_activity and recent_grid_activity[0]["recorded_at"] < cutoff:
+        recent_grid_activity.popleft()
+    return [
+        {
+            "id": str(item["id"]),
+            "type": str(item["type"]),
+            "sector": str(item["sector"]),
+            "created_at": str(item["created_at"]),
+        }
+        for item in recent_grid_activity
+    ]
+
+
+def record_grid_activity(activity_type: str, sector: str) -> dict[str, str] | None:
+    """Publish a short-lived abstract pulse without actor or resource metadata."""
+    if activity_type not in LIVE_GRID_PULSE_TYPES or sector not in LIVE_GRID_SECTORS:
+        return None
+    pulse = {
+        "id": secrets.token_hex(6),
+        "type": activity_type,
+        "sector": sector,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "recorded_at": time.monotonic(),
+    }
+    recent_grid_activity.append(pulse)
+    public_pulse = {key: str(pulse[key]) for key in ("id", "type", "sector", "created_at")}
+    socketio.emit("live_grid_pulse", public_pulse, to=LIVE_GRID_ROOM)
+    return public_pulse
+
+
+def broadcast_live_grid_presence() -> None:
+    for viewer_id, user_data in list(connected_users.items()):
+        if not user_data["sids"]:
+            continue
+        viewer = db.session.get(User, viewer_id)
+        if viewer is None or viewer.account_state != "Active":
+            continue
+        socketio.emit(
+            "live_grid_presence",
+            {"operators": _live_grid_operators(viewer_id)},
+            to=user_room(viewer_id),
+        )
 
 
 def get_online_callsigns(viewer_id: int | None = None) -> list[str]:
@@ -55,6 +142,7 @@ def broadcast_online_users() -> None:
             {"users": get_online_callsigns(user_id)},
             to=user_room(user_id),
         )
+    broadcast_live_grid_presence()
 
 
 def disconnect_user_sessions(user_id: int) -> None:
@@ -64,6 +152,21 @@ def disconnect_user_sessions(user_id: int) -> None:
         return
     for sid in list(user_data["sids"]):
         socketio.server.disconnect(sid, namespace="/")
+
+
+def _expire_disconnected_user(user_id: int, token: str, app) -> None:
+    socketio.sleep(PRESENCE_DISCONNECT_GRACE_SECONDS)
+    with app.app_context():
+        user_data = connected_users.get(user_id)
+        if (
+            user_data is None
+            or user_data["sids"]
+            or user_data.get("disconnect_token") != token
+        ):
+            return
+        connected_users.pop(user_id, None)
+        record_grid_activity("OPERATOR OFFLINE", "ACTIVE")
+        broadcast_online_users()
 
 
 def _active_socket_user() -> bool:
@@ -115,13 +218,22 @@ def handle_connect():
     for conversation in accessible_conversations(current_user):
         join_room(conversation_room(conversation.id))
 
-    if user_id not in connected_users:
+    was_offline = user_id not in connected_users
+    if was_offline:
         connected_users[user_id] = {
             "callsign": current_user.username,
             "sids": set(),
+            "sectors": {},
+            "activity": {},
+            "disconnect_token": None,
         }
+    connected_users[user_id]["disconnect_token"] = None
     connected_users[user_id]["sids"].add(sid)
+    connected_users[user_id]["sectors"][sid] = "ACTIVE"
+    connected_users[user_id]["activity"][sid] = next(presence_sequence)
     sid_to_user_id[sid] = user_id
+    if was_offline:
+        record_grid_activity("OPERATOR ONLINE", "ACTIVE")
     broadcast_online_users()
 
 
@@ -135,9 +247,50 @@ def handle_disconnect():
     if user_data is None:
         return
     user_data["sids"].discard(sid)
+    user_data.get("sectors", {}).pop(sid, None)
+    user_data.get("activity", {}).pop(sid, None)
     if not user_data["sids"]:
-        connected_users.pop(user_id, None)
+        token = secrets.token_hex(8)
+        user_data["disconnect_token"] = token
+        socketio.start_background_task(
+            _expire_disconnected_user,
+            user_id,
+            token,
+            current_app._get_current_object(),
+        )
+        return
     broadcast_online_users()
+
+
+@socketio.on("presence_sector")
+def handle_presence_sector(data):
+    if not _active_socket_user():
+        return
+    sector = data.get("sector") if isinstance(data, dict) else None
+    if sector not in LIVE_GRID_SECTORS:
+        emit("presence_error", {"error": "Select a valid Grid sector."})
+        return
+    user_data = connected_users.get(current_user.id)
+    if user_data is None or request.sid not in user_data["sids"]:
+        return
+    user_data["sectors"][request.sid] = sector
+    user_data["activity"][request.sid] = next(presence_sequence)
+    broadcast_live_grid_presence()
+    emit("presence_updated", {"sector": sector})
+
+
+@socketio.on("live_grid_subscribe")
+def handle_live_grid_subscribe():
+    if not _active_socket_user():
+        return
+    join_room(LIVE_GRID_ROOM)
+    emit(
+        "live_grid_state",
+        {
+            "operators": _live_grid_operators(current_user.id),
+            "pulses": _recent_activity(),
+        },
+    )
 
 
 @socketio.on("subscribe_conversation")
@@ -189,6 +342,12 @@ def handle_message(data):
         payload,
         to=conversation_room(conversation.id),
     )
+    conversation_sector = {
+        "grid": "GRID",
+        "direct": "DIRECT",
+        "group": "GROUPS",
+    }[conversation.type]
+    record_grid_activity("TRANSMISSION", conversation_sector)
     emit(
         "message_ack",
         {

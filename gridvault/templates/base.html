@@ -7,9 +7,10 @@
     <meta name="theme-color" content="#090c0f">
     <title>{% block title %}GridVault{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% if current_user.is_authenticated %}<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" defer></script>{% endif %}
     {% block head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}"{% if current_user.is_authenticated %} data-grid-sector="{{ presence_sector | default(grid_presence_sector) }}"{% endif %}>
     {% if current_user.is_authenticated %}
         <div class="app-shell">
             <aside class="sidebar" aria-label="GridVault navigation">
@@ -34,6 +35,11 @@
                     <a href="{{ url_for('console.dashboard') }}" class="{{ 'active' if request.endpoint == 'console.dashboard' else '' }}">
                         <span class="nav-code">MC</span>
                         <span>Mission Console</span>
+                    </a>
+                    <a href="{{ url_for('live_grid.index') }}" class="{{ 'active' if request.blueprint == 'live_grid' else '' }}">
+                        <span class="nav-code">LG</span>
+                        <span>Live Grid</span>
+                        <span class="live-dot" title="Live presence"></span>
                     </a>
                     <a href="{{ url_for('hub.chat') }}" class="{{ 'active' if request.endpoint == 'hub.chat' else '' }}">
                         <span class="nav-code">HB</span>
@@ -135,6 +141,7 @@
         </div>
     {% endif %}
 
+    {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/live_presence.js', v='1.0') }}" defer></script>{% endif %}
     {% block scripts %}{% endblock %}
 </body>
 </html>
