@@ -31,6 +31,14 @@ Blocking is private and reversible. A block disables Direct discovery, history a
 
 Administrators can suspend or reactivate accounts from Access Control. Suspension preserves all historical content, rotates the account's authentication version, disconnects active sockets, and prevents HTTP, WebSocket, and login activity. Reactivation requires a fresh login; previously invalidated sessions do not resume.
 
+## Live Grid
+
+Live Grid is an authenticated visual navigation and broad-presence layer for GRID, Direct, Groups, Design Lab/VC Board, authorized conversation files, and operator access. It links into the existing modules rather than duplicating them. Online callsigns are deduplicated across tabs and link to the existing compact operator profiles.
+
+Operators choose between `Sector` visibility, which shares only the broad current sector, and the default `Active` visibility, which hides the sector. The current sector is ephemeral and selected from a strict server-side allowlist; the most recently active authenticated tab wins. Blocking and suspension rules continue to filter presence.
+
+Recent map pulses are short-lived and in memory only. They contain an abstract type and sector, never callsigns, Direct participants, Group names, message text, file names, board titles, invitation activity, reports, or moderation details.
+
 ## Project Vault
 
 Project Vault v1 provides a complete authenticated project workflow:
@@ -104,7 +112,7 @@ For production, set both `GRIDVAULT_ENV=production` and a strong `SECRET_KEY`. N
 
 The application factory explicitly keeps Flask's instance directory at `instance/`, and the `User` and `Message` models retain their original table and column names. Existing `instance/gridvault.db` files therefore continue to provide the same user accounts and stored messages after upgrading.
 
-GridVault uses an additive schema strategy: `ensure_schema()` calls SQLAlchemy's check-first table creation to create only missing tables and indexes, including invitation, block, and report records. It adds only nullable or safely defaulted profile, account-state, and session-version columns to legacy users; existing accounts remain Active and already oriented. It never drops, rewrites, or renames the existing `user` or `message` tables. The automated suite validates this strategy against a temporary legacy-format database before releases are merged.
+GridVault uses an additive schema strategy: `ensure_schema()` calls SQLAlchemy's check-first table creation to create only missing tables and indexes, including invitation, block, and report records. It adds only nullable or safely defaulted profile, account-state, session-version, and presence-visibility columns to legacy users; existing accounts remain Active, presence-private, and already oriented. It never drops, rewrites, or renames the existing `user` or `message` tables. The automated suite validates this strategy against a temporary legacy-format database before releases are merged.
 
 The entire `instance/` directory plus common SQLite extensions are ignored. Do not commit a database file.
 
@@ -140,7 +148,7 @@ node --check gridvault/static/js/chat.js
 node --check gridvault/static/js/access_control.js
 ```
 
-The suite verifies invitation-only authentication, operator-profile privacy, Direct blocking, private reporting, suspension and session invalidation, administrator permissions, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
+The suite verifies invitation-only authentication, operator-profile privacy, Live Grid presence privacy and abstract pulses, Direct blocking, private reporting, suspension and session invalidation, administrator permissions, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
 
 ## Production serving
 

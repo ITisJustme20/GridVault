@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Live Grid | GridVault{% endblock %}
+{% block topbar_title %}Live Grid{% endblock %}
+
+{% block content %}
+<section id="live-grid-app" class="live-grid-page" data-profile-base="{{ url_for('profiles.view_profile', callsign='__CALLSIGN__') }}">
+    <header class="live-grid-header">
+        <div>
+            <p class="eyebrow">Navigation and broad presence</p>
+            <h1>LIVE GRID</h1>
+            <p>Enter a sector, locate online operators, or watch abstract recent Grid activity.</p>
+        </div>
+        {% if is_gridvault_admin(current_user) %}
+            <a class="secondary-button" href="{{ url_for('access_control.index') }}">Access Control</a>
+        {% endif %}
+    </header>
+
+    <div class="live-grid-layout">
+        <section class="live-grid-map" aria-label="GridVault sectors">
+            <svg class="live-grid-paths" viewBox="0 0 1000 620" aria-hidden="true" focusable="false">
+                <path d="M500 310 L210 145 M500 310 L500 105 M500 310 L790 145 M500 310 L210 475 M500 310 L500 515 M500 310 L790 475"></path>
+                <circle cx="500" cy="310" r="84"></circle>
+            </svg>
+            <div class="live-grid-core" aria-hidden="true"><span>GRIDVAULT</span><strong>ONLINE</strong></div>
+            <div class="live-grid-sectors">
+                {% for label, destination, description in sectors %}
+                <a class="live-grid-sector live-grid-sector-{{ loop.index }}" data-sector="{{ label }}" href="{{ destination }}" aria-label="Open {{ label }} sector: {{ description }}">
+                    <small>SECTOR</small>
+                    <strong>{{ label }}</strong>
+                    <span>{{ description }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+
+        <aside class="live-grid-side">
+            <section class="live-grid-panel" aria-labelledby="online-operators-title">
+                <div class="live-grid-panel-heading">
+                    <div><p class="eyebrow">Current signal</p><h2 id="online-operators-title">ONLINE OPERATORS</h2></div>
+                    <span id="live-grid-operator-count">0</span>
+                </div>
+                <div id="live-grid-operators" class="live-grid-operators" aria-live="polite">
+                    <p class="live-grid-empty">Waiting for authenticated presence.</p>
+                </div>
+            </section>
+
+            <section class="live-grid-panel" aria-labelledby="activity-pulses-title">
+                <div class="live-grid-panel-heading">
+                    <div><p class="eyebrow">Abstract activity</p><h2 id="activity-pulses-title">RECENT PULSES</h2></div>
+                </div>
+                <ol id="live-grid-pulses" class="live-grid-pulses" aria-live="polite">
+                    <li class="live-grid-empty">No recent Grid pulses.</li>
+                </ol>
+            </section>
+
+            <section class="live-grid-panel live-grid-preference" aria-labelledby="presence-visibility-title">
+                <p class="eyebrow">Privacy control</p>
+                <h2 id="presence-visibility-title">PRESENCE VISIBILITY</h2>
+                <form method="post" action="{{ url_for('live_grid.update_presence_visibility') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {% for visibility in presence_visibilities %}
+                    <label>
+                        <input type="radio" name="presence_visibility" value="{{ visibility }}" {{ 'checked' if current_user.presence_visibility == visibility else '' }}>
+                        <span><strong>{{ visibility | upper }}</strong><small>{{ 'Show your broad current sector.' if visibility == 'Sector' else 'Show only that you are active.' }}</small></span>
+                    </label>
+                    {% endfor %}
+                    <button class="primary-button" type="submit">Save Presence</button>
+                </form>
+            </section>
+        </aside>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/live_grid.js', v='1.0') }}" defer></script>{% endblock %}

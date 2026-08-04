@@ -5,7 +5,7 @@ from __future__ import annotations
 import secrets
 from pathlib import Path
 
-from flask import Flask, session
+from flask import Flask, request, session
 
 from .config import Config
 from .extensions import csrf, db, login_manager, socketio
@@ -72,6 +72,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     from .blueprints.console import console_bp
     from .blueprints.design_lab import design_lab_bp
     from .blueprints.hub import hub_bp
+    from .blueprints.live_grid import live_grid_bp
     from .blueprints.modules import modules_bp
     from .blueprints.projects import projects_bp
     from .blueprints.profiles import profiles_bp
@@ -100,12 +101,22 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(access_control_bp)
     app.register_blueprint(console_bp)
     app.register_blueprint(hub_bp)
+    app.register_blueprint(live_grid_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(design_lab_bp)
     app.register_blueprint(modules_bp)
     app.register_blueprint(profiles_bp)
 
     app.jinja_env.globals["is_gridvault_admin"] = is_gridvault_admin
+
+    @app.context_processor
+    def inject_grid_presence_sector():
+        sector = "ACTIVE"
+        if request.blueprint == "design_lab":
+            sector = "VC BOARD"
+        elif request.blueprint in {"profiles", "access_control"}:
+            sector = "ACCESS"
+        return {"grid_presence_sector": sector}
 
     @app.after_request
     def add_security_headers(response):

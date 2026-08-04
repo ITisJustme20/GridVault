@@ -67,7 +67,7 @@ test("rendered board advertises persistence and read-only controls", () => {
 });
 
 test("Hub allows Socket.IO transport fallback for forwarded proxies", () => {
-    assert.match(chat, /const socket = io\(\);/);
+    assert.match(chat, /const socket = window\.gridVaultSocket \|\| io\(\);/);
     assert.doesNotMatch(chat, /transports\s*:/);
 });
 

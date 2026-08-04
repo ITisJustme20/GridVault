@@ -79,6 +79,13 @@ def _add_missing_user_columns() -> None:
                     "INTEGER NOT NULL DEFAULT 0"
                 )
             )
+        if "presence_visibility" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE user ADD COLUMN presence_visibility "
+                    "VARCHAR(10) NOT NULL DEFAULT 'Active'"
+                )
+            )
         connection.execute(
             text(
                 "CREATE INDEX IF NOT EXISTS idx_user_account_state "
