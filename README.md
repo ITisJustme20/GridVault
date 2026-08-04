@@ -31,6 +31,8 @@ Blocking is private and reversible. A block disables Direct discovery, history a
 
 Administrators can suspend or reactivate accounts from Access Control. Suspension preserves all historical content, rotates the account's authentication version, disconnects active sockets, and prevents HTTP, WebSocket, and login activity. Reactivation requires a fresh login; previously invalidated sessions do not resume.
 
+Each operator profile also includes a deterministic technical Identity Disc and a short Disc Code marked `IDENTITY REFERENCE ONLY`. Both are derived on demand with HMAC-SHA256 from the immutable internal user ID and a dedicated server-only secret. Neither the internal ID nor the secret-derived fingerprint is exposed to the browser; clients receive only bounded SVG drawing parameters. Identity Discs are not authentication, recovery, encryption, or verification credentials and cannot be customized or regenerated.
+
 ## Live Grid
 
 Live Grid is an authenticated visual navigation and broad-presence layer for GRID, Direct, Groups, Design Lab/VC Board, authorized conversation files, and operator access. It links into the existing modules rather than duplicating them. Online callsigns are deduplicated across tabs and link to the existing compact operator profiles.
@@ -98,6 +100,7 @@ GridVault is then available at `http://localhost:5000`.
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `SECRET_KEY` | Signs login sessions and CSRF tokens | Ephemeral in development; required in production |
+| `IDENTITY_DISC_SECRET` | Stable server-only HMAC key for Operator Identity Discs | Generated in the ignored instance directory for development; required in production |
 | `GRIDVAULT_ENV` | Set to `production` for strict secret validation and secure cookies | `development` |
 | `DATABASE_URL` | SQLAlchemy database connection | `sqlite:///gridvault.db` |
 | `SOCKETIO_CORS_ALLOWED_ORIGINS` | Optional comma-separated trusted browser origins | Same-origin only |
@@ -106,7 +109,7 @@ GridVault is then available at `http://localhost:5000`.
 | `DESIGN_UPLOAD_MAX_BYTES` | Per-image upload limit | 5 MB |
 | `GRIDVAULT_DEBUG` | Opt into the Flask debugger and reloader for local development | Disabled |
 
-For production, set both `GRIDVAULT_ENV=production` and a strong `SECRET_KEY`. Never place real secrets in source control.
+For production, set `GRIDVAULT_ENV=production`, a strong `SECRET_KEY`, and a separate stable `IDENTITY_DISC_SECRET` of at least 32 characters. Preserve the Identity Disc secret across deployments so existing operators retain the same visual reference. Never place real secrets in source control.
 
 ## Data compatibility
 
@@ -148,7 +151,7 @@ node --check gridvault/static/js/chat.js
 node --check gridvault/static/js/access_control.js
 ```
 
-The suite verifies invitation-only authentication, operator-profile privacy, Live Grid presence privacy and abstract pulses, Direct blocking, private reporting, suspension and session invalidation, administrator permissions, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
+The suite verifies invitation-only authentication, operator-profile privacy, deterministic Identity Discs, Live Grid presence privacy and abstract pulses, Direct blocking, private reporting, suspension and session invalidation, administrator permissions, persistent Hub behavior, Project Vault, Design Lab gallery and dossier flows, board persistence and concurrent-save protection, bounded drag and resize geometry, zoom anchoring, layer ordering, revision snapshots, collaborators, approval and rejection, uploads, archive lockout, Mission Console metrics, input validation, CSRF enforcement, and legacy-data-preserving schema upgrades. The same Python and JavaScript checks run in GitHub Actions for pushes and pull requests.
 
 ## Production serving
 

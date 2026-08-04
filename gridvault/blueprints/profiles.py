@@ -5,6 +5,7 @@ from flask_login import current_user, login_required
 
 from ..chat_service import display_name
 from ..extensions import db
+from ..identity_disc import identity_disc_for_user
 from ..models import PROFILE_SPECIALTIES, REPORT_CATEGORIES, UserBlock, UserReport
 from ..realtime import broadcast_online_users
 from ..trust_service import (
@@ -50,6 +51,7 @@ def view_profile(callsign: str):
         shared_groups=shared_groups,
         display_name=display_name,
         blocked_by_viewer=blocked_by_viewer,
+        identity_disc=identity_disc_for_user(operator),
     )
 
 

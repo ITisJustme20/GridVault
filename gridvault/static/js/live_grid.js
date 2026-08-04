@@ -38,13 +38,17 @@
             link.className = "live-grid-operator";
             link.href = profileUrl(item.callsign);
             link.setAttribute("aria-label", `Open operator profile for ${item.callsign}`);
+            const disc = document.createElement("span");
+            disc.className = "identity-disc identity-disc-compact";
+            disc.setAttribute("aria-hidden", "true");
+            window.GridVaultIdentityDisc?.render(disc, item.disc);
             const label = document.createElement("small");
             label.textContent = "OPERATOR";
             const callsign = document.createElement("strong");
             callsign.textContent = item.callsign;
             const presence = document.createElement("span");
             presence.textContent = item.sector;
-            link.append(label, callsign, presence);
+            link.append(disc, label, callsign, presence);
             operators.append(link);
         });
     }

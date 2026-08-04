@@ -22,6 +22,27 @@
         <div><dt>Joined</dt><dd>{{ operator.created_at.strftime('%B %d, %Y') }}</dd></div>
     </dl>
 
+    <section class="operator-identity-panel" aria-labelledby="identity-disc-title">
+        <div
+            class="identity-disc identity-disc-profile"
+            data-identity-disc='{{ identity_disc.visual | tojson }}'
+            role="img"
+            aria-label="Deterministic Identity Disc for operator {{ operator.username }}"
+        ></div>
+        <div class="operator-identity-copy">
+            <p class="eyebrow">Technical identity pattern</p>
+            <h2 id="identity-disc-title">IDENTITY DISC</h2>
+            <p>Server-derived visual reference assigned permanently to this operator identity.</p>
+            <dl>
+                <div>
+                    <dt>DISC CODE</dt>
+                    <dd><code>{{ identity_disc.code }}</code></dd>
+                </div>
+            </dl>
+            <strong class="identity-reference-note">IDENTITY REFERENCE ONLY</strong>
+        </div>
+    </section>
+
     <section class="shared-groups" aria-labelledby="shared-groups-title">
         <p class="eyebrow">Mutual access</p>
         <h2 id="shared-groups-title">Shared Groups</h2>
@@ -54,3 +75,5 @@
     {% endif %}
 </section>
 {% endblock %}
+
+{% block scripts %}<script src="{{ url_for('static', filename='js/identity_disc.js', v='1.0') }}" defer></script>{% endblock %}
