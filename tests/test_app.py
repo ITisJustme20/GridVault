@@ -71,6 +71,7 @@ class GridVaultTestCase(unittest.TestCase):
             "/hub",
             "/chat",
             "/live-grid",
+            "/signals",
             "/design-lab",
             "/engineering-bay",
             "/project-vault",

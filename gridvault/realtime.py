@@ -25,6 +25,7 @@ from .chat_service import (
 from .extensions import db, socketio
 from .identity_disc import identity_disc_for_user
 from .models import Message, User
+from .signal_service import broadcast_signal_updates, signal_count
 from .trust_service import blocked_user_ids
 
 
@@ -311,6 +312,13 @@ def handle_subscribe(data):
     emit("conversation_subscribed", {"conversation_id": conversation.id})
 
 
+@socketio.on("signals_subscribe")
+def handle_signals_subscribe():
+    if not _active_socket_user():
+        return
+    emit("signal_count", {"count": signal_count(current_user)})
+
+
 @socketio.on("send_message")
 def handle_message(data):
     if not _active_socket_user():
@@ -355,6 +363,12 @@ def handle_message(data):
         "group": "GROUPS",
     }[conversation.type]
     record_grid_activity("TRANSMISSION", conversation_sector)
+    if conversation.type in {"direct", "group"}:
+        broadcast_signal_updates(
+            membership.user_id
+            for membership in conversation.memberships
+            if membership.user_id != current_user.id
+        )
     emit(
         "message_ack",
         {
@@ -423,6 +437,8 @@ def handle_mark_read(data):
     if membership.last_read_message_id is None or message_id > membership.last_read_message_id:
         membership.last_read_message_id = message_id
         db.session.commit()
+    if conversation.type in {"direct", "group"}:
+        broadcast_signal_updates({current_user.id})
     callsigns = receipt_callsigns(message)
     socketio.emit(
         "read_receipt_update",

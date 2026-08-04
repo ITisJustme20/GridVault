@@ -46,6 +46,11 @@
                         <span>The Hub</span>
                         <span class="live-dot" title="Live module"></span>
                     </a>
+                    <a href="{{ url_for('signals.index') }}" class="{{ 'active' if request.blueprint == 'signals' else '' }}">
+                        <span class="nav-code">SG</span>
+                        <span>SIGNALS</span>
+                        <strong id="signal-nav-count" class="signal-nav-count" aria-label="{{ active_signal_count }} active signals" {{ 'hidden' if not active_signal_count else '' }}>{{ active_signal_count }}</strong>
+                    </a>
                     {% if is_gridvault_admin(current_user) %}
                     <a href="{{ url_for('access_control.index') }}" class="{{ 'active' if request.blueprint == 'access_control' else '' }}">
                         <span class="nav-code">AC</span>
@@ -141,7 +146,10 @@
         </div>
     {% endif %}
 
-    {% if current_user.is_authenticated %}<script src="{{ url_for('static', filename='js/live_presence.js', v='1.0') }}" defer></script>{% endif %}
+    {% if current_user.is_authenticated %}
+    <script src="{{ url_for('static', filename='js/live_presence.js', v='1.0') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/signals.js', v='1.1') }}" defer></script>
+    {% endif %}
     {% block scripts %}{% endblock %}
 </body>
 </html>

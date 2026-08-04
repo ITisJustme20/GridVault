@@ -169,11 +169,11 @@
         }
         actions.append(actionLink("Download", attachment.download_url));
         section.append(meta, actions);
-        if (attachment.category === "Image" && attachment.preview_url) {
+        if (attachment.category === "Image" && attachment.thumbnail_url) {
             const preview = actionLink("", attachment.preview_url, true);
             preview.className = "attachment-thumbnail";
             const image = document.createElement("img");
-            image.src = attachment.preview_url;
+            image.src = attachment.thumbnail_url;
             image.alt = `Preview of ${attachment.filename}`;
             image.loading = "lazy";
             preview.append(image);

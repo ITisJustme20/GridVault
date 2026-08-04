@@ -135,15 +135,17 @@ def report_operator(callsign: str):
                 selected_category=category,
                 explanation=explanation,
             ), 400
-        db.session.add(
-            UserReport(
-                reporter_id=current_user.id,
-                reported_user_id=operator.id,
-                category=category,
-                explanation=explanation,
-            )
+        report = UserReport(
+            reporter_id=current_user.id,
+            reported_user_id=operator.id,
+            category=category,
+            explanation=explanation,
         )
+        db.session.add(report)
         db.session.commit()
+        from ..signal_service import administrator_user_ids, broadcast_signal_updates
+
+        broadcast_signal_updates(administrator_user_ids())
         flash("Report submitted to GridVault administrators.", "success")
         return redirect(url_for("profiles.view_profile", callsign=operator.username))
     return render_template(

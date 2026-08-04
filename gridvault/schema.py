@@ -27,6 +27,26 @@ def _add_missing_design_columns() -> None:
             )
 
 
+def _add_missing_report_columns() -> None:
+    """Add minimal administrator report-review state."""
+    inspector = inspect(db.engine)
+    if "user_report" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("user_report")}
+    with db.engine.begin() as connection:
+        if "reviewed_at" not in columns:
+            connection.execute(
+                text("ALTER TABLE user_report ADD COLUMN reviewed_at DATETIME")
+            )
+        if "reviewed_by_user_id" not in columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE user_report ADD COLUMN reviewed_by_user_id "
+                    "INTEGER REFERENCES user(id)"
+                )
+            )
+
+
 def _add_missing_user_columns() -> None:
     """Add access-control flags while preserving legacy operator behavior."""
     inspector = inspect(db.engine)
@@ -141,4 +161,5 @@ def ensure_schema(app) -> None:
         _add_missing_user_columns()
         _add_missing_message_columns()
         _add_missing_design_columns()
+        _add_missing_report_columns()
         _associate_grid_history()

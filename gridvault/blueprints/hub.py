@@ -45,6 +45,12 @@ from ..file_vault import (
     validate_upload,
 )
 from ..models import ChatAttachment, Conversation, ConversationMember, Message, User
+from ..signal_service import (
+    broadcast_signal_updates,
+    mark_attachment_opened,
+    record_group_access,
+    resolve_group_access,
+)
 from ..trust_service import block_between
 
 
@@ -131,6 +137,9 @@ def chat():
         )
     else:
         active, active_membership = authorized_conversation(grid.id, current_user)
+
+    if active.type == "group":
+        resolve_group_access(current_user.id, active.id)
 
     unread_counts = {
         item.id: unread_count(
@@ -301,6 +310,11 @@ def upload_attachment(conversation_id: int):
 
     payload = broadcast_message(message, client_id)
     record_grid_activity("FILE TRANSFER", "FILE VAULT")
+    broadcast_signal_updates(
+        membership.user_id
+        for membership in conversation.memberships
+        if membership.user_id != current_user.id
+    )
     return jsonify({"ok": True, "message": payload}), 201
 
 
@@ -352,6 +366,13 @@ def preview_attachment(attachment_id: str):
             "inline",
             filename=attachment.original_filename,
         )
+    is_thumbnail = (
+        request.args.get("inline") == "1"
+        or request.headers.get("Sec-Fetch-Dest", "").lower() == "image"
+    )
+    if not is_thumbnail:
+        mark_attachment_opened(current_user.id, attachment.id)
+        broadcast_signal_updates({current_user.id})
     return _secure_file_response(response)
 
 
@@ -371,6 +392,8 @@ def download_attachment(attachment_id: str):
         conditional=True,
         max_age=0,
     )
+    mark_attachment_opened(current_user.id, attachment.id)
+    broadcast_signal_updates({current_user.id})
     return _secure_file_response(response)
 
 
@@ -436,11 +459,13 @@ def create_conversation():
         *(ConversationMember(user=user) for user in participants),
     ]
     db.session.add(conversation)
+    record_group_access(conversation, participants)
     db.session.commit()
     _notify_conversation_members(
         conversation,
         exclude_user_id=current_user.id,
     )
+    broadcast_signal_updates(user.id for user in participants)
     return redirect(url_for("hub.chat", conversation=conversation.id))
 
 
@@ -472,11 +497,13 @@ def add_group_member(conversation_id: int):
     else:
         conversation.memberships.append(ConversationMember(user=user))
         conversation.updated_at = datetime.now(timezone.utc)
+        record_group_access(conversation, [user])
         db.session.commit()
         _notify_conversation_members(
             conversation,
             exclude_user_id=current_user.id,
         )
+        broadcast_signal_updates({user.id})
         flash(f"{user.username} joined the group.", "success")
     return redirect(url_for("hub.chat", conversation=conversation.id))
 
